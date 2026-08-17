@@ -1,10 +1,11 @@
 # Happy Tree Friends
 
-适用于《魔兽世界》正式服 12.1 的轻量实用功能合集插件。当前版本为 `0.1.1`，MVP 包含：
+适用于《魔兽世界》正式服 12.1 的轻量实用功能合集插件。当前版本为 `0.2.0`，MVP 包含：
 
-- 自动修理（只用个人金币）
+- 自动修理（可选个人金币，或公会银行优先）
 - 自动售卖可出售的灰色物品
-- 角色主要属性、副属性与三级属性展示
+- 可锁定、可拖动的透明角色属性悬浮层
+- 每项属性独立显示/隐藏、文字颜色和全局字号设置
 - 精致的左右布局管理页与可选调试模式
 
 ## 安装
@@ -20,26 +21,45 @@ World of Warcraft/_retail_/Interface/AddOns/HappyTreeFriends/
 ## 使用
 
 - `/htf`：打开设置
-- `/htf stats`：直接打开角色属性页
+- `/htf stats`：直接打开属性悬浮层设置页
 - `/htf merchant`：直接打开商人功能页
 - `/htf debug`：快速开关调试模式
 - `/htf dump`：打开调试页并生成可复制的诊断报告
 - `/htf clearlog`：清空持久化调试日志
 - `/htf help`：显示命令帮助
 
-插件设置页采用左侧分类、右侧功能内容的布局；为保护金币与物品，首次安装时自动修理和自动售卖灰色物品默认关闭，角色属性页默认开启，调试模式默认关闭。启用相应开关后立即生效。
+插件设置页采用左侧分类、右侧功能内容的布局；为保护金币与物品，首次安装时自动修理、自动售卖灰色物品和公会维修选项默认关闭，属性悬浮层默认开启并锁定，调试模式默认关闭。启用相应开关后立即生效。
+
+### 属性悬浮层
+
+1. 输入 `/htf stats` 打开“角色属性”。
+2. 关闭“锁定属性悬浮层”，游戏画面会出现带边框的拖动区域。
+3. 用鼠标左键拖到合适位置，再重新锁定。锁定后背景和边框完全透明，也不会拦截鼠标。
+4. 在同一页面逐项选择显示/隐藏，点击每行右侧色块调整文字颜色，并用 `−` / `+` 修改全局字号。
+
+位置、锁定状态、字号、每项可见性与颜色均保存在 `HappyTreeFriendsDB` 中，`/reload` 和重新登录后仍会保留。
+
+### 公会银行维修
+
+“优先使用公会银行维修”只有在“自动修理”同时开启时生效：
+
+- 关闭：始终调用个人金币修理。
+- 开启且角色有公会维修权限：先使用当前可用的公会维修额度，额度不足时由个人金币补足。
+- 没有权限、没有额度或额度不可安全读取：回退到纯个人金币修理。
+- 公会额度与个人金币合计不足：跳过修理，不主动产生部分扣款。
 
 ## 12.1 / 12.0+ API 兼容策略
 
 - TOC 使用 `## Interface: 120100`，目标为 Retail 12.1.0。
 - 自动售卖使用当前客户端的 `C_MerchantFrame.GetNumJunkItems()` 与 `C_MerchantFrame.SellAllJunkItems()`，不依赖旧式背包遍历或已弃用容器 API。
-- 自动修理沿用暴雪 12.1 商人界面仍在使用的 `CanMerchantRepair()`、`GetRepairAllCost()`、`RepairAllItems()`；只在 `MERCHANT_SHOW` 后一次执行。
+- 自动修理沿用暴雪 12.1 商人界面的 `CanMerchantRepair()`、`GetRepairAllCost()` 与 `RepairAllItems()`；个人修理调用 `RepairAllItems()`，公会优先调用 `RepairAllItems(true)`，并在调用前安全检查权限、维修额度与所需个人补款。
 - 属性读取逐项通过 `issecretvalue()` 防护。12.0 引入的受限/Secret Value 不会被格式化、比较或拼接；战斗中会延迟到脱战后刷新，受限字段显示为“受限”。
-- 暴击显示沿用暴雪角色面板口径：在法术、远程与近战暴击中选择当前面板使用的数值；角色名与职业等条件 Secret Value 也会安全降级。
+- 暴击显示沿用暴雪角色面板口径：在法术、远程与近战暴击中选择当前面板使用的数值。
+- 颜色选择器使用 12.1 的 `ColorPickerFrame:SetupColorPickerAndShow(info)` 回调模式，不依赖旧版全局回调字段。
 
 ## 性能
 
-没有 `OnUpdate` 循环、没有常驻背包扫描，也不监听战斗日志。商人功能只在打开商人窗口时执行一次；属性页仅在设置窗口中的属性页实际可见时，因装备/属性变化或脱战合并刷新一次。
+没有 `OnUpdate` 循环、没有常驻背包扫描，也不监听战斗日志。商人功能只在打开商人窗口时执行一次；属性悬浮层只在启用时因进入世界、装备/专精/属性变化或脱战合并刷新一次。被隐藏的属性不会调用对应读取 API。
 
 ## 调试与验证
 
@@ -57,9 +77,10 @@ World of Warcraft/_retail_/Interface/AddOns/HappyTreeFriends/
 建议的游戏内验收顺序：
 
 1. 登录后输入 `/htf`，确认设置页四个左侧分类能切换。
-2. 勾选调试模式，前往可修理商人；确认自动修理只在装备有损耗且金币充足时发生。
-3. 放入一个有售价的灰色物品后再次打开商人；确认它被自动出售。
-4. 打开“角色属性”，装备/卸下一件装备验证数值刷新；在战斗中确认页面提示会在脱战后刷新而不是报 Lua 错。
+2. 解锁属性悬浮层并拖动，重新锁定后确认背景透明、鼠标可正常点击其下方界面；再测试逐项隐藏、字号和颜色。
+3. 勾选调试模式，前往可修理商人；分别验证纯个人修理，以及有权限角色的公会银行优先修理。
+4. 放入一个有售价的灰色物品后再次打开商人；确认它被自动出售。
+5. 装备/卸下一件装备验证悬浮层数值刷新；在战斗中确认保留旧值并提示脱战后刷新，而不是报 Lua 错。
 
 不安装 WoW 客户端也可以运行仓库内的无客户端回归测试（首次执行会由 npm 临时下载 Fengari）：
 
@@ -67,13 +88,15 @@ World of Warcraft/_retail_/Interface/AddOns/HappyTreeFriends/
 npx --yes --package=fengari-node-cli fengari tests/headless.lua
 ```
 
-该测试覆盖默认设置、Secret Value 安全降级、暴击口径、隐藏页面不刷新、商人操作与战斗后重试、持久化日志及诊断报告。它用于提前发现 Lua 逻辑回归，最终仍应以上述游戏内验收为准。
+该测试覆盖默认设置、HUD 透明/锁定/拖动与位置持久化、逐项可见性、字体和颜色、Secret Value 安全降级、暴击口径、公会/个人维修分支、商人操作与战斗后重试、持久化日志及诊断报告。它用于提前发现 Lua 逻辑回归，最终仍应以上述游戏内验收为准。
 
 ## 参考的当前客户端 API
 
 - [Blizzard 12.1 MerchantFrame source](https://github.com/Gethe/wow-ui-source/blob/live/Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua)
+- [Blizzard 12.1 MerchantFrame XML（个人/公会维修按钮）](https://github.com/Gethe/wow-ui-source/blob/live/Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml)
 - [Blizzard 12.1 Container API documentation](https://github.com/Gethe/wow-ui-source/blob/live/Interface/AddOns/Blizzard_APIDocumentationGenerated/ContainerDocumentation.lua)
 - [Blizzard 12.1 Player API documentation](https://github.com/Gethe/wow-ui-source/blob/live/Interface/AddOns/Blizzard_APIDocumentationGenerated/PlayerScriptDocumentation.lua)
 - [Blizzard 12.1 PaperDoll source](https://github.com/Gethe/wow-ui-source/blob/live/Interface/AddOns/Blizzard_UIPanels_Game/Mainline/PaperDollFrame.lua)
 - [Blizzard 12.1 Settings source](https://github.com/Gethe/wow-ui-source/blob/live/Interface/AddOns/Blizzard_Settings_Shared/Blizzard_Settings.lua)
+- [Blizzard 12.1 ColorPickerFrame source](https://github.com/Gethe/wow-ui-source/blob/live/Interface/AddOns/Blizzard_ColorPickerFrame/Mainline/ColorPickerFrame.lua)
 - [Blizzard 12.1 ScrollFrame templates](https://github.com/Gethe/wow-ui-source/blob/live/Interface/AddOns/Blizzard_SharedXML/SecureScrollTemplates.xml)

@@ -1,14 +1,55 @@
 local ADDON_NAME, HTF = ...
 
 HTF.ADDON_NAME = ADDON_NAME
-HTF.VERSION = "0.1.1"
+HTF.VERSION = "0.2.0"
 HTF.MAX_DEBUG_LOG_ENTRIES = 80
 HTF.debugLog = {}
 
 HTF.defaults = {
 	autoRepair = false,
+	repairFromGuild = false,
 	autoSellJunk = false,
 	showStats = true,
+	statsLocked = true,
+	statsFontSize = 14,
+	statsPosition = {
+		point = "TOPRIGHT",
+		relativePoint = "TOPRIGHT",
+		x = -70,
+		y = -260,
+	},
+	statsVisibility = {
+		strength = true,
+		agility = true,
+		stamina = true,
+		intellect = true,
+		armor = true,
+		criticalStrike = true,
+		haste = true,
+		mastery = true,
+		versatility = true,
+		lifesteal = true,
+		avoidance = true,
+		speed = true,
+		dodge = true,
+		parry = true,
+	},
+	statsColors = {
+		strength = { 0.96, 0.45, 0.42 },
+		agility = { 0.42, 0.91, 0.62 },
+		stamina = { 0.95, 0.68, 0.33 },
+		intellect = { 0.44, 0.69, 1.00 },
+		armor = { 0.74, 0.78, 0.86 },
+		criticalStrike = { 1.00, 0.43, 0.50 },
+		haste = { 0.96, 0.82, 0.34 },
+		mastery = { 0.73, 0.55, 1.00 },
+		versatility = { 0.31, 0.87, 0.81 },
+		lifesteal = { 0.94, 0.48, 0.78 },
+		avoidance = { 0.36, 0.76, 0.96 },
+		speed = { 0.48, 0.93, 0.68 },
+		dodge = { 0.69, 0.88, 0.34 },
+		parry = { 1.00, 0.61, 0.31 },
+	},
 	showNotifications = true,
 	debug = false,
 	debugLog = {},
@@ -66,6 +107,9 @@ function HTF:SetSetting(key, value)
 	end
 
 	self.db[key] = value
+	if self.Stats and self.Stats.OnSettingChanged then
+		self.Stats:OnSettingChanged(key)
+	end
 	if self.Options and self.Options.Refresh then
 		self.Options:Refresh()
 	end
@@ -185,8 +229,13 @@ function HTF:BuildDiagnosticReport()
 		"Settings:",
 	}
 
-	for _, key in ipairs({ "autoRepair", "autoSellJunk", "showStats", "showNotifications", "debug" }) do
+	for _, key in ipairs({ "autoRepair", "repairFromGuild", "autoSellJunk", "showStats", "statsLocked", "showNotifications", "debug" }) do
 		table.insert(lines, string.format("- %s: %s", key, tostring(self:GetSetting(key) == true)))
+	end
+	table.insert(lines, string.format("- statsFontSize: %s", self:SafeScalarText(self:GetSetting("statsFontSize"))))
+	if self.Stats then
+		table.insert(lines, string.format("- visibleStats: %d/%d", self.Stats:GetVisibleStatCount(), #self.Stats.STAT_DEFINITIONS))
+		table.insert(lines, "- statsPosition: " .. self.Stats:GetPositionSummary())
 	end
 
 	table.insert(lines, "")

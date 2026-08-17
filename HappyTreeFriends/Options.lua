@@ -123,6 +123,61 @@ function Options:CreateToggleRow(parent, yOffset, settingKey, title, description
 	return row
 end
 
+function Options:CreateCompactToggleRow(parent, xOffset, yOffset, settingKey, title, description)
+	local row = CreateFrame("Button", nil, parent, "BackdropTemplate")
+	row:SetPoint("TOPLEFT", parent, "TOPLEFT", xOffset, yOffset)
+	row:SetSize(278, 58)
+	applyBackdrop(row, COLORS.panel, COLORS.border)
+
+	local titleText = createText(row, "GameFontNormal", title, 13, COLORS.text)
+	titleText:SetPoint("TOPLEFT", 13, -10)
+	titleText:SetJustifyH("LEFT")
+
+	local descriptionText = createText(row, "GameFontHighlightSmall", description, 10, COLORS.muted)
+	descriptionText:SetPoint("TOPLEFT", titleText, "BOTTOMLEFT", 0, -5)
+	descriptionText:SetPoint("RIGHT", row, "RIGHT", -62, 0)
+	descriptionText:SetJustifyH("LEFT")
+
+	local toggle = CreateFrame("Frame", nil, row, "BackdropTemplate")
+	toggle:SetSize(40, 22)
+	toggle:SetPoint("RIGHT", row, "RIGHT", -12, 0)
+	applyBackdrop(toggle, COLORS.disabled, COLORS.border)
+
+	toggle.dot = toggle:CreateTexture(nil, "ARTWORK")
+	toggle.dot:SetTexture("Interface\\Buttons\\WHITE8x8")
+	toggle.dot:SetSize(14, 14)
+
+	function toggle:Render(value)
+		self.dot:ClearAllPoints()
+		if value then
+			self:SetBackdropColor(COLORS.accentMuted[1], COLORS.accentMuted[2], COLORS.accentMuted[3], COLORS.accentMuted[4])
+			self:SetBackdropBorderColor(COLORS.accent[1], COLORS.accent[2], COLORS.accent[3], COLORS.accent[4])
+			self.dot:SetColorTexture(COLORS.accent[1], COLORS.accent[2], COLORS.accent[3], 1)
+			self.dot:SetPoint("RIGHT", -3, 0)
+		else
+			self:SetBackdropColor(COLORS.disabled[1], COLORS.disabled[2], COLORS.disabled[3], COLORS.disabled[4])
+			self:SetBackdropBorderColor(COLORS.border[1], COLORS.border[2], COLORS.border[3], COLORS.border[4])
+			self.dot:SetColorTexture(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3], 1)
+			self.dot:SetPoint("LEFT", 3, 0)
+		end
+	end
+
+	row:SetScript("OnEnter", function(self)
+		self:SetBackdropColor(COLORS.panelHover[1], COLORS.panelHover[2], COLORS.panelHover[3], COLORS.panelHover[4])
+	end)
+	row:SetScript("OnLeave", function(self)
+		self:SetBackdropColor(COLORS.panel[1], COLORS.panel[2], COLORS.panel[3], COLORS.panel[4])
+	end)
+	row:SetScript("OnClick", function()
+		HTF:SetSetting(settingKey, not HTF:GetSetting(settingKey))
+	end)
+
+	row.toggle = toggle
+	row.settingKey = settingKey
+	table.insert(self.toggles, row)
+	return row
+end
+
 function Options:CreateNavigationButton(parent, key, text, yOffset)
 	local options = self
 	local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
@@ -240,102 +295,187 @@ end
 function Options:CreateMerchantPage(page)
 	self:AddPageHeader(page, HTF.L.MERCHANT, "仅在打开商人窗口时执行；不扫描背包，也不使用常驻轮询。")
 
-	self:CreateToggleRow(page, -96, "autoRepair", HTF.L.AUTO_REPAIR, HTF.L.AUTO_REPAIR_DESC)
-	self:CreateToggleRow(page, -174, "autoSellJunk", HTF.L.AUTO_SELL_JUNK, HTF.L.AUTO_SELL_JUNK_DESC)
-	self:CreateToggleRow(page, -252, "showNotifications", HTF.L.SHOW_NOTIFICATIONS, HTF.L.SHOW_NOTIFICATIONS_DESC)
+	self:CreateToggleRow(page, -84, "autoRepair", HTF.L.AUTO_REPAIR, HTF.L.AUTO_REPAIR_DESC)
+	self:CreateToggleRow(page, -156, "repairFromGuild", HTF.L.REPAIR_FROM_GUILD, HTF.L.REPAIR_FROM_GUILD_DESC)
+	self:CreateToggleRow(page, -228, "autoSellJunk", HTF.L.AUTO_SELL_JUNK, HTF.L.AUTO_SELL_JUNK_DESC)
+	self:CreateToggleRow(page, -300, "showNotifications", HTF.L.SHOW_NOTIFICATIONS, HTF.L.SHOW_NOTIFICATIONS_DESC)
 
 	local note = CreateFrame("Frame", nil, page, "BackdropTemplate")
-	note:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -346)
-	note:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, -346)
-	note:SetHeight(72)
+	note:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -386)
+	note:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, -386)
+	note:SetHeight(88)
 	applyBackdrop(note, COLORS.sidebar, COLORS.border)
 
-	local noteText = createText(note, "GameFontHighlightSmall", HTF.L.AUTO_ACTIONS_NOTICE .. " 自动修理只使用个人金币；金币不足时不会扣款。自动售卖使用 12.1 的 C_MerchantFrame.SellAllJunkItems()，只处理有售价的灰色物品。", 12, COLORS.muted)
+	local noteText = createText(note, "GameFontHighlightSmall", HTF.L.AUTO_ACTIONS_NOTICE .. " 公会维修遵循 12.1 原生规则：有权限时优先使用可用额度，额度不足由个人金币补足；关闭公会选项后始终只用个人金币。自动售卖只处理有售价的灰色物品。", 11, COLORS.muted)
 	noteText:SetPoint("TOPLEFT", 14, -13)
 	noteText:SetPoint("TOPRIGHT", -14, -13)
 	noteText:SetJustifyH("LEFT")
 	noteText:SetJustifyV("TOP")
 end
 
-function Options:CreateStatRow(parent, xOffset, yOffset, key, label)
-	local row = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+function Options:CreateStatSettingRow(parent, xOffset, yOffset, key, label)
+	local row = CreateFrame("Button", nil, parent, "BackdropTemplate")
 	row:SetPoint("TOPLEFT", parent, "TOPLEFT", xOffset, yOffset)
-	row:SetSize(278, 31)
+	row:SetSize(278, 29)
 	applyBackdrop(row, COLORS.panel, COLORS.border)
 
-	row.label = createText(row, "GameFontHighlightSmall", label, 12, COLORS.muted)
-	row.label:SetPoint("LEFT", 12, 0)
-	row.defaultLabel = label
+	row.indicator = row:CreateTexture(nil, "ARTWORK")
+	row.indicator:SetTexture("Interface\\Buttons\\WHITE8x8")
+	row.indicator:SetSize(11, 11)
+	row.indicator:SetPoint("LEFT", 10, 0)
 
-	row.value = createText(row, "GameFontNormal", HTF.L.STAT_UNAVAILABLE, 12, COLORS.text)
-	row.value:SetPoint("RIGHT", -12, 0)
-	row.value:SetJustifyH("RIGHT")
+	row.label = createText(row, "GameFontHighlightSmall", label, 11, COLORS.text)
+	row.label:SetPoint("LEFT", row.indicator, "RIGHT", 8, 0)
+
+	row.state = createText(row, "GameFontHighlightSmall", "", 10, COLORS.muted)
+	row.state:SetPoint("RIGHT", row, "RIGHT", -43, 0)
+
+	row.colorButton = CreateFrame("Button", nil, row, "BackdropTemplate")
+	row.colorButton:SetSize(24, 17)
+	row.colorButton:SetPoint("RIGHT", row, "RIGHT", -10, 0)
+	applyBackdrop(row.colorButton, COLORS.panelHover, COLORS.border)
+	row.colorButton.swatch = row.colorButton:CreateTexture(nil, "ARTWORK")
+	row.colorButton.swatch:SetPoint("TOPLEFT", 3, -3)
+	row.colorButton.swatch:SetPoint("BOTTOMRIGHT", -3, 3)
+	row.colorButton.swatch:SetTexture("Interface\\Buttons\\WHITE8x8")
+	row.colorButton:SetScript("OnClick", function()
+		self:OpenStatColorPicker(key)
+	end)
+
+	function row:Render(visible, r, g, b)
+		self.colorButton.swatch:SetColorTexture(r, g, b, 1)
+		if visible then
+			self.indicator:SetColorTexture(COLORS.accent[1], COLORS.accent[2], COLORS.accent[3], 1)
+			self.label:SetTextColor(r, g, b, 1)
+			self.state:SetText("显示")
+			self.state:SetTextColor(COLORS.accent[1], COLORS.accent[2], COLORS.accent[3], 1)
+		else
+			self.indicator:SetColorTexture(COLORS.disabled[1], COLORS.disabled[2], COLORS.disabled[3], 1)
+			self.label:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3], COLORS.muted[4])
+			self.state:SetText("隐藏")
+			self.state:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3], COLORS.muted[4])
+		end
+	end
+
+	row:SetScript("OnEnter", function(self)
+		self:SetBackdropColor(COLORS.panelHover[1], COLORS.panelHover[2], COLORS.panelHover[3], COLORS.panelHover[4])
+	end)
+	row:SetScript("OnLeave", function(self)
+		self:SetBackdropColor(COLORS.panel[1], COLORS.panel[2], COLORS.panel[3], COLORS.panel[4])
+	end)
+	row:SetScript("OnClick", function()
+		HTF.Stats:SetStatVisible(key, not HTF.Stats:IsStatVisible(key))
+	end)
+
+	self.statSettingRows[key] = row
 	return row
 end
 
 function Options:CreateStatsPage(page)
-	self:AddPageHeader(page, HTF.L.CHARACTER_STATS, "事件触发刷新。12.0+ 受限值会显示为“受限”，不会造成 Lua 错误。")
-	self:CreateToggleRow(page, -96, "showStats", HTF.L.SHOW_STATS, HTF.L.SHOW_STATS_DESC)
+	self:AddPageHeader(page, HTF.L.CHARACTER_STATS, "管理游戏画面上的透明属性悬浮层；数值由事件触发刷新，不使用持续轮询。")
+	self:CreateCompactToggleRow(page, 20, -84, "showStats", HTF.L.SHOW_STATS, HTF.L.SHOW_STATS_DESC)
+	self:CreateCompactToggleRow(page, 316, -84, "statsLocked", HTF.L.LOCK_STATS, HTF.L.LOCK_STATS_DESC)
 
-	local profileCard = CreateFrame("Frame", nil, page, "BackdropTemplate")
-	profileCard:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -180)
-	profileCard:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, -180)
-	profileCard:SetHeight(58)
-	applyBackdrop(profileCard, COLORS.sidebar, COLORS.border)
+	local controlCard = CreateFrame("Frame", nil, page, "BackdropTemplate")
+	controlCard:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -150)
+	controlCard:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, -150)
+	controlCard:SetHeight(52)
+	applyBackdrop(controlCard, COLORS.sidebar, COLORS.border)
 
-	local profile = createText(profileCard, "GameFontNormal", "", 13, COLORS.text)
-	profile:SetPoint("TOPLEFT", 14, -11)
-	profile:SetPoint("RIGHT", profileCard, "RIGHT", -106, 0)
-	profile:SetJustifyH("LEFT")
+	local fontLabel = createText(controlCard, "GameFontNormal", HTF.L.STATS_FONT_SIZE, 12, COLORS.text)
+	fontLabel:SetPoint("LEFT", 13, 0)
 
-	local status = createText(profileCard, "GameFontHighlightSmall", "", 11, COLORS.muted)
-	status:SetPoint("TOPLEFT", profile, "BOTTOMLEFT", 0, -7)
-	status:SetPoint("RIGHT", profileCard, "RIGHT", -106, 0)
-	status:SetJustifyH("LEFT")
-
-	local refreshButton = createActionButton(profileCard, HTF.L.REFRESH)
-	refreshButton:SetSize(82, 28)
-	refreshButton:SetPoint("RIGHT", -14, 0)
-	refreshButton:SetScript("OnClick", function()
-		if HTF.Stats then
-			HTF.Stats:Refresh()
-		end
+	local minusButton = createActionButton(controlCard, "−")
+	minusButton:SetSize(28, 26)
+	minusButton:SetPoint("LEFT", fontLabel, "RIGHT", 12, 0)
+	minusButton:SetScript("OnClick", function()
+		HTF.Stats:SetFontSize(HTF.Stats:GetFontSize() - 1)
 	end)
 
-	local statRows = {}
-	local left = {
-		{ "strength", "力量" },
-		{ "agility", "敏捷" },
-		{ "stamina", "耐力" },
-		{ "intellect", "智力" },
-		{ "armor", "护甲" },
-		{ "criticalStrike", "暴击" },
-		{ "dodge", "躲闪" },
-	}
-	local right = {
-		{ "haste", "急速" },
-		{ "mastery", "精通" },
-		{ "versatility", "全能" },
-		{ "lifesteal", "吸血" },
-		{ "avoidance", "闪避" },
-		{ "speed", "速度" },
-		{ "parry", "招架" },
-	}
+	self.statsFontValue = createText(controlCard, "GameFontNormal", "", 12, COLORS.accent)
+	self.statsFontValue:SetPoint("LEFT", minusButton, "RIGHT", 10, 0)
+	self.statsFontValue:SetWidth(24)
+	self.statsFontValue:SetJustifyH("CENTER")
 
-	for index, entry in ipairs(left) do
-		statRows[entry[1]] = self:CreateStatRow(page, 20, -254 - (index - 1) * 37, entry[1], entry[2])
+	local plusButton = createActionButton(controlCard, "+")
+	plusButton:SetSize(28, 26)
+	plusButton:SetPoint("LEFT", self.statsFontValue, "RIGHT", 10, 0)
+	plusButton:SetScript("OnClick", function()
+		HTF.Stats:SetFontSize(HTF.Stats:GetFontSize() + 1)
+	end)
+
+	local resetColorsButton = createActionButton(controlCard, HTF.L.STATS_RESET_COLORS)
+	resetColorsButton:SetSize(88, 26)
+	resetColorsButton:SetPoint("RIGHT", controlCard, "RIGHT", -12, 0)
+	resetColorsButton:SetScript("OnClick", function()
+		HTF.Stats:ResetColors()
+	end)
+
+	local resetPositionButton = createActionButton(controlCard, HTF.L.STATS_RESET_POSITION)
+	resetPositionButton:SetSize(88, 26)
+	resetPositionButton:SetPoint("RIGHT", resetColorsButton, "LEFT", -8, 0)
+	resetPositionButton:SetScript("OnClick", function()
+		HTF.Stats:ResetPosition()
+	end)
+
+	local listTitle = createText(page, "GameFontNormal", HTF.L.STATS_DISPLAY_ITEMS, 12, COLORS.text)
+	listTitle:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -216)
+
+	self.statSettingRows = {}
+	for index, definition in ipairs(HTF.Stats.STAT_DEFINITIONS) do
+		local column = index <= 7 and 0 or 1
+		local rowIndex = column == 0 and index or index - 7
+		local xOffset = column == 0 and 20 or 316
+		self:CreateStatSettingRow(page, xOffset, -242 - (rowIndex - 1) * 34, definition.key, HTF.Stats:GetStatLabel(definition.key))
 	end
-	for index, entry in ipairs(right) do
-		statRows[entry[1]] = self:CreateStatRow(page, 316, -254 - (index - 1) * 37, entry[1], entry[2])
+end
+
+function Options:OpenStatColorPicker(key)
+	if not HTF.Stats or type(ColorPickerFrame) ~= "table" or type(ColorPickerFrame.SetupColorPickerAndShow) ~= "function" then
+		HTF:Notify(HTF.L.COLOR_PICKER_UNAVAILABLE)
+		return
 	end
 
-	if HTF.Stats then
-		HTF.Stats:AttachView({
-			profile = profile,
-			status = status,
-			rows = statRows,
-		})
+	local originalR, originalG, originalB = HTF.Stats:GetStatColor(key)
+	ColorPickerFrame:SetupColorPickerAndShow({
+		r = originalR,
+		g = originalG,
+		b = originalB,
+		hasOpacity = false,
+		swatchFunc = function()
+			local r, g, b = ColorPickerFrame:GetColorRGB()
+			HTF.Stats:SetStatColor(key, r, g, b)
+		end,
+		cancelFunc = function(previousValues)
+			local r = type(previousValues) == "table" and previousValues.r or originalR
+			local g = type(previousValues) == "table" and previousValues.g or originalG
+			local b = type(previousValues) == "table" and previousValues.b or originalB
+			HTF.Stats:SetStatColor(key, r, g, b)
+		end,
+	})
+end
+
+function Options:RefreshStatSettings()
+	if not HTF.Stats then
+		return
 	end
+	if self.statsFontValue then
+		self.statsFontValue:SetText(tostring(HTF.Stats:GetFontSize()))
+	end
+	if self.statSettingRows then
+		for key in pairs(self.statSettingRows) do
+			self:RefreshStatSetting(key)
+		end
+	end
+end
+
+function Options:RefreshStatSetting(key)
+	local row = self.statSettingRows and self.statSettingRows[key]
+	if not row or not HTF.Stats then
+		return
+	end
+	local r, g, b = HTF.Stats:GetStatColor(key)
+	row:Render(HTF.Stats:IsStatVisible(key), r, g, b)
 end
 
 function Options:CreateDebugPage(page)
@@ -575,10 +715,8 @@ function Options:SelectPage(key)
 		button:SetSelected(pageKey == key)
 	end
 
-	if key == "stats" and HTF.Stats then
-		HTF.Stats:Refresh()
-	end
 	self:RefreshOverview()
+	self:RefreshStatSettings()
 	self:RefreshDebugLog()
 end
 
@@ -627,10 +765,8 @@ function Options:Refresh()
 		row.toggle:Render(HTF:GetSetting(row.settingKey))
 	end
 	self:RefreshOverview()
+	self:RefreshStatSettings()
 	self:RefreshDebugLog()
-	if self:IsPageVisible("stats") and HTF.Stats then
-		HTF.Stats:Refresh()
-	end
 end
 
 function Options:Open(page)

@@ -80,15 +80,63 @@ function Merchant:TryAutoRepair()
 		return nil
 	end
 
-	local money = type(GetMoney) == "function" and GetMoney() or nil
-	if not HTF:IsSafeNumber(money) or money < repairCost then
-		HTF:Debug("自动修理跳过：金币不足。")
-		return false
+	local useGuild = false
+	local guildAvailable = 0
+	if HTF:GetSetting("repairFromGuild") then
+		if type(CanGuildBankRepair) == "function" then
+			local canGuildRepair = CanGuildBankRepair()
+			if not HTF:IsSecretValue(canGuildRepair) and canGuildRepair then
+				local withdrawAmount
+				local bankAmount
+				if type(GetGuildBankWithdrawMoney) == "function" then
+					withdrawAmount = GetGuildBankWithdrawMoney()
+				end
+				if type(GetGuildBankMoney) == "function" then
+					bankAmount = GetGuildBankMoney()
+				end
+				if HTF:IsSafeNumber(withdrawAmount) and HTF:IsSafeNumber(bankAmount) then
+					if withdrawAmount == -1 then
+						guildAvailable = math.max(0, bankAmount)
+					else
+						guildAvailable = math.max(0, math.min(withdrawAmount, bankAmount))
+					end
+					useGuild = guildAvailable > 0
+					if not useGuild then
+						HTF:Debug("公会修理回退：当前可用公会维修额度为 0，改用个人金币。")
+					end
+				else
+					HTF:Debug("公会修理回退：公会维修额度当前不可读取，改用个人金币。")
+				end
+			else
+				HTF:Debug("公会修理回退：角色当前没有公会维修权限，改用个人金币。")
+			end
+		else
+			HTF:Debug("公会修理回退：公会维修权限 API 不可用，改用个人金币。")
+		end
+	end
+
+	local personalNeeded = useGuild and math.max(0, repairCost - guildAvailable) or repairCost
+	if personalNeeded > 0 then
+		local money
+		if type(GetMoney) == "function" then
+			money = GetMoney()
+		end
+		if not HTF:IsSafeNumber(money) or money < personalNeeded then
+			HTF:Debug("自动修理跳过：可用的公会维修额度与个人金币合计不足。")
+			return false
+		end
+	end
+
+	if useGuild then
+		RepairAllItems(true)
+		local source = guildAvailable >= repairCost and "guild" or "mixed"
+		HTF:Debugf("已执行自动修理，费用：%s，资金来源：%s。", HTF:FormatMoney(repairCost), source == "guild" and "公会银行" or "公会银行 + 个人金币")
+		return { cost = repairCost, source = source }
 	end
 
 	RepairAllItems()
-	HTF:Debugf("已执行自动修理，费用：%s。", HTF:FormatMoney(repairCost))
-	return repairCost
+	HTF:Debugf("已执行自动修理，费用：%s，资金来源：个人金币。", HTF:FormatMoney(repairCost))
+	return { cost = repairCost, source = "personal" }
 end
 
 function Merchant:TryAutoSellJunk()
@@ -127,11 +175,17 @@ function Merchant:RunMerchantActions()
 
 	local summary = {}
 	if HTF:GetSetting("autoRepair") then
-		local repairCost = self:TryAutoRepair()
-		if repairCost == false then
+		local repairResult = self:TryAutoRepair()
+		if repairResult == false then
 			table.insert(summary, HTF.L.NOT_ENOUGH_MONEY)
-		elseif repairCost then
-			table.insert(summary, string.format(HTF.L.REPAIRED, HTF:FormatMoney(repairCost)))
+		elseif repairResult then
+			local message = HTF.L.REPAIRED_PERSONAL
+			if repairResult.source == "guild" then
+				message = HTF.L.REPAIRED_GUILD
+			elseif repairResult.source == "mixed" then
+				message = HTF.L.REPAIRED_MIXED
+			end
+			table.insert(summary, string.format(message, HTF:FormatMoney(repairResult.cost)))
 		end
 	end
 

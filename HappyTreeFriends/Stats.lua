@@ -3,12 +3,51 @@ local _, HTF = ...
 local Stats = {}
 HTF.Stats = Stats
 
-local primaryStats = {
-	{ key = "strength", index = 1, fallback = "力量" },
-	{ key = "agility", index = 2, fallback = "敏捷" },
-	{ key = "stamina", index = 3, fallback = "耐力" },
-	{ key = "intellect", index = 4, fallback = "智力" },
+Stats.MIN_FONT_SIZE = 10
+Stats.MAX_FONT_SIZE = 24
+Stats.STAT_DEFINITIONS = {
+	{ key = "strength", primaryIndex = 1, fallback = "力量" },
+	{ key = "agility", primaryIndex = 2, fallback = "敏捷" },
+	{ key = "stamina", primaryIndex = 3, fallback = "耐力" },
+	{ key = "intellect", primaryIndex = 4, fallback = "智力" },
+	{ key = "armor", globalLabel = "STAT_ARMOR", fallback = "护甲" },
+	{ key = "criticalStrike", globalLabel = "STAT_CRITICAL_STRIKE", fallback = "暴击" },
+	{ key = "haste", globalLabel = "STAT_HASTE", fallback = "急速" },
+	{ key = "mastery", globalLabel = "STAT_MASTERY", fallback = "精通" },
+	{ key = "versatility", globalLabel = "STAT_VERSATILITY", fallback = "全能" },
+	{ key = "lifesteal", globalLabel = "STAT_LIFESTEAL", fallback = "吸血" },
+	{ key = "avoidance", globalLabel = "STAT_AVOIDANCE", fallback = "闪避" },
+	{ key = "speed", globalLabel = "STAT_SPEED", fallback = "速度" },
+	{ key = "dodge", globalLabel = "DODGE", fallback = "躲闪" },
+	{ key = "parry", globalLabel = "PARRY", fallback = "招架" },
 }
+
+local definitionByKey = {}
+for _, definition in ipairs(Stats.STAT_DEFINITIONS) do
+	definitionByKey[definition.key] = definition
+end
+
+local VALID_POINTS = {
+	TOPLEFT = true,
+	TOP = true,
+	TOPRIGHT = true,
+	LEFT = true,
+	CENTER = true,
+	RIGHT = true,
+	BOTTOMLEFT = true,
+	BOTTOM = true,
+	BOTTOMRIGHT = true,
+}
+
+local OVERLAY_BACKDROP = {
+	bgFile = "Interface\\Buttons\\WHITE8x8",
+	edgeFile = "Interface\\Buttons\\WHITE8x8",
+	edgeSize = 1,
+}
+
+local function clamp(value, minimum, maximum)
+	return math.max(minimum, math.min(maximum, value))
+end
 
 local function integerText(value)
 	local rounded = math.floor(value + 0.5)
@@ -20,6 +59,322 @@ end
 
 local function percentText(value)
 	return string.format("%.2f%%", value)
+end
+
+local function copyColor(color)
+	return { color[1], color[2], color[3] }
+end
+
+function Stats:GetStatDefinition(key)
+	return definitionByKey[key]
+end
+
+function Stats:GetStatLabel(key)
+	local definition = definitionByKey[key]
+	if not definition then
+		return key
+	end
+	if definition.primaryIndex then
+		return _G["SPELL_STAT" .. definition.primaryIndex .. "_NAME"] or definition.fallback
+	end
+	return (definition.globalLabel and _G[definition.globalLabel]) or definition.fallback
+end
+
+function Stats:NormalizeSettings()
+	local db = HTF.db
+	if not db then
+		return
+	end
+
+	if type(db.statsLocked) ~= "boolean" then
+		db.statsLocked = HTF.defaults.statsLocked
+	end
+	if type(db.statsFontSize) ~= "number" then
+		db.statsFontSize = HTF.defaults.statsFontSize
+	else
+		db.statsFontSize = clamp(math.floor(db.statsFontSize + 0.5), self.MIN_FONT_SIZE, self.MAX_FONT_SIZE)
+	end
+
+	if type(db.statsVisibility) ~= "table" then
+		db.statsVisibility = {}
+	end
+	if type(db.statsColors) ~= "table" then
+		db.statsColors = {}
+	end
+	for _, definition in ipairs(self.STAT_DEFINITIONS) do
+		local key = definition.key
+		if type(db.statsVisibility[key]) ~= "boolean" then
+			db.statsVisibility[key] = HTF.defaults.statsVisibility[key]
+		end
+
+		local savedColor = db.statsColors[key]
+		local defaultColor = HTF.defaults.statsColors[key]
+		if type(savedColor) ~= "table" then
+			savedColor = copyColor(defaultColor)
+			db.statsColors[key] = savedColor
+		end
+		for component = 1, 3 do
+			if type(savedColor[component]) ~= "number" then
+				savedColor[component] = defaultColor[component]
+			else
+				savedColor[component] = clamp(savedColor[component], 0, 1)
+			end
+		end
+	end
+
+	local savedPosition = db.statsPosition
+	local defaultPosition = HTF.defaults.statsPosition
+	if type(savedPosition) ~= "table" then
+		savedPosition = {}
+		db.statsPosition = savedPosition
+	end
+	if not VALID_POINTS[savedPosition.point] then
+		savedPosition.point = defaultPosition.point
+	end
+	if not VALID_POINTS[savedPosition.relativePoint] then
+		savedPosition.relativePoint = defaultPosition.relativePoint
+	end
+	if type(savedPosition.x) ~= "number" then
+		savedPosition.x = defaultPosition.x
+	else
+		savedPosition.x = clamp(savedPosition.x, -4096, 4096)
+	end
+	if type(savedPosition.y) ~= "number" then
+		savedPosition.y = defaultPosition.y
+	else
+		savedPosition.y = clamp(savedPosition.y, -4096, 4096)
+	end
+end
+
+function Stats:Initialize()
+	if self.initialized then
+		return
+	end
+
+	self.initialized = true
+	self:NormalizeSettings()
+	self:CreateOverlay()
+	self:ApplyOverlaySettings()
+
+	self.eventFrame = CreateFrame("Frame")
+	self.eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+	self.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+	self.eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+	self.eventFrame:RegisterEvent("UNIT_STATS")
+	self.eventFrame:RegisterEvent("COMBAT_RATING_UPDATE")
+	self.eventFrame:RegisterEvent("MASTERY_UPDATE")
+	self.eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
+	self.eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+	self.eventFrame:SetScript("OnEvent", function(_, event, unit)
+		self:OnEvent(event, unit)
+	end)
+end
+
+function Stats:CreateOverlay()
+	if self.overlay then
+		return
+	end
+
+	local overlay = CreateFrame("Frame", "HappyTreeFriendsStatsOverlay", UIParent, "BackdropTemplate")
+	overlay:SetSize(190, 100)
+	overlay:SetFrameStrata("MEDIUM")
+	overlay:SetMovable(true)
+	overlay:SetClampedToScreen(true)
+	overlay:RegisterForDrag("LeftButton")
+	overlay:SetBackdrop(OVERLAY_BACKDROP)
+	overlay:SetScript("OnDragStart", function(frame)
+		if not HTF:GetSetting("statsLocked") then
+			frame:StartMoving()
+		end
+	end)
+	overlay:SetScript("OnDragStop", function(frame)
+		frame:StopMovingOrSizing()
+		self:SavePosition()
+	end)
+
+	overlay.title = overlay:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	overlay.title:SetPoint("TOPLEFT", overlay, "TOPLEFT", 8, -7)
+	overlay.title:SetText(HTF.L.STATS_DRAG_HINT)
+	overlay.title:SetTextColor(0.77, 0.84, 0.94, 1)
+
+	overlay.status = overlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	overlay.status:SetJustifyH("LEFT")
+	overlay.status:SetTextColor(0.95, 0.72, 0.42, 1)
+	overlay.status:SetShadowColor(0, 0, 0, 1)
+	overlay.status:SetShadowOffset(1, -1)
+
+	overlay.rows = {}
+	for _, definition in ipairs(self.STAT_DEFINITIONS) do
+		local row = overlay:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		row:SetJustifyH("LEFT")
+		row:SetShadowColor(0, 0, 0, 1)
+		row:SetShadowOffset(1, -1)
+		row:SetText(string.format("%s: %s", self:GetStatLabel(definition.key), HTF.L.STAT_UNAVAILABLE))
+		overlay.rows[definition.key] = row
+	end
+
+	self.overlay = overlay
+end
+
+function Stats:ApplyPosition()
+	if not self.overlay then
+		return
+	end
+	local position = HTF.db.statsPosition
+	self.overlay:ClearAllPoints()
+	self.overlay:SetPoint(position.point, UIParent, position.relativePoint, position.x, position.y)
+end
+
+function Stats:SavePosition()
+	if not self.overlay or type(self.overlay.GetPoint) ~= "function" then
+		return
+	end
+
+	local point, _, relativePoint, x, y = self.overlay:GetPoint(1)
+	if not VALID_POINTS[point] or not VALID_POINTS[relativePoint] or type(x) ~= "number" or type(y) ~= "number" then
+		HTF:Debug("属性悬浮层位置保存跳过：框体坐标不可用。")
+		return
+	end
+
+	local position = HTF.db.statsPosition
+	position.point = point
+	position.relativePoint = relativePoint
+	position.x = clamp(x, -4096, 4096)
+	position.y = clamp(y, -4096, 4096)
+	HTF:Debugf("属性悬浮层位置已保存：%s/%s %.1f %.1f。", point, relativePoint, position.x, position.y)
+end
+
+function Stats:LayoutOverlay()
+	if not self.overlay then
+		return
+	end
+
+	local locked = HTF:GetSetting("statsLocked")
+	local fontSize = self:GetFontSize()
+	local lineHeight = fontSize + 4
+	local yOffset = locked and -4 or -27
+	local visibleCount = 0
+
+	for _, definition in ipairs(self.STAT_DEFINITIONS) do
+		local row = self.overlay.rows[definition.key]
+		row:ClearAllPoints()
+		if self:IsStatVisible(definition.key) then
+			row:SetPoint("TOPLEFT", self.overlay, "TOPLEFT", 8, yOffset)
+			row:SetPoint("RIGHT", self.overlay, "RIGHT", -8, 0)
+			row:SetHeight(lineHeight)
+			row:Show()
+			yOffset = yOffset - lineHeight
+			visibleCount = visibleCount + 1
+		else
+			row:Hide()
+		end
+	end
+
+	self.overlay.status:ClearAllPoints()
+	if self.overlayStatus and self.overlayStatus ~= "" then
+		self.overlay.status:SetPoint("TOPLEFT", self.overlay, "TOPLEFT", 8, yOffset - 1)
+		self.overlay.status:SetPoint("RIGHT", self.overlay, "RIGHT", -8, 0)
+		self.overlay.status:SetHeight(15)
+		self.overlay.status:Show()
+		yOffset = yOffset - 18
+	else
+		self.overlay.status:Hide()
+	end
+
+	local minimumHeight = locked and 16 or 34
+	self.overlay:SetSize(math.max(190, fontSize * 11), math.max(minimumHeight, -yOffset + 4))
+	self.visibleRowCount = visibleCount
+end
+
+function Stats:ApplyOverlaySettings()
+	if not self.overlay or not HTF.db then
+		return
+	end
+
+	self:NormalizeSettings()
+	local locked = HTF:GetSetting("statsLocked")
+	local fontSize = self:GetFontSize()
+	self.overlay:EnableMouse(not locked)
+	if locked then
+		self.overlay:SetBackdropColor(0.04, 0.06, 0.09, 0)
+		self.overlay:SetBackdropBorderColor(0.30, 0.89, 0.67, 0)
+		self.overlay.title:Hide()
+	else
+		self.overlay:SetBackdropColor(0.04, 0.06, 0.09, 0.82)
+		self.overlay:SetBackdropBorderColor(0.30, 0.89, 0.67, 0.95)
+		self.overlay.title:Show()
+	end
+
+	for _, definition in ipairs(self.STAT_DEFINITIONS) do
+		local row = self.overlay.rows[definition.key]
+		local font, _, flags = row:GetFont()
+		if font then
+			row:SetFont(font, fontSize, flags)
+		end
+		local r, g, b = self:GetStatColor(definition.key)
+		row:SetTextColor(r, g, b, 1)
+	end
+
+	self:ApplyPosition()
+	self:LayoutOverlay()
+	if HTF:GetSetting("showStats") then
+		self.overlay:Show()
+	else
+		self.overlay:Hide()
+	end
+end
+
+function Stats:OnSettingChanged(key)
+	if key ~= "showStats" and key ~= "statsLocked" and key ~= "statsFontSize" then
+		return
+	end
+	self:ApplyOverlaySettings()
+	if key == "showStats" and HTF:GetSetting("showStats") then
+		self:RequestRefresh()
+	end
+end
+
+function Stats:OnEvent(event, unit)
+	if event == "UNIT_STATS" and unit ~= "player" then
+		return
+	end
+	if event == "PLAYER_REGEN_DISABLED" then
+		self:ShowCombatRestriction()
+		return
+	end
+	self:RequestRefresh()
+end
+
+function Stats:IsVisible()
+	return self.overlay and self.overlay:IsShown() and HTF:GetSetting("showStats") == true
+end
+
+function Stats:RequestRefresh()
+	if not self:IsVisible() or self.refreshQueued then
+		return
+	end
+
+	self.refreshQueued = true
+	local function refresh()
+		self.refreshQueued = false
+		self:Refresh()
+	end
+
+	if C_Timer and C_Timer.After then
+		C_Timer.After(0.05, refresh)
+	else
+		refresh()
+	end
+end
+
+function Stats:AddValue(snapshot, key, value, formatter)
+	if not HTF:IsSafeNumber(value) then
+		snapshot[key] = { text = HTF.L.STAT_RESTRICTED, restricted = true }
+		return true
+	end
+
+	snapshot[key] = { text = formatter(value), restricted = false }
+	return false
 end
 
 function Stats:GetDisplayedCritChance()
@@ -62,222 +417,120 @@ function Stats:GetDisplayedCritChance()
 	return displayedCrit
 end
 
-function Stats:Initialize()
-	if self.initialized then
-		return
+function Stats:GetVersatility()
+	if type(GetCombatRatingBonus) ~= "function"
+		or type(GetVersatilityBonus) ~= "function"
+		or not CR_VERSATILITY_DAMAGE_DONE then
+		return nil
 	end
 
-	self.initialized = true
-	self.eventFrame = CreateFrame("Frame")
-	self.eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-	self.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
-	self.eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-	self.eventFrame:RegisterEvent("UNIT_STATS")
-	self.eventFrame:RegisterEvent("COMBAT_RATING_UPDATE")
-	self.eventFrame:RegisterEvent("MASTERY_UPDATE")
-	self.eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
-	self.eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-	self.eventFrame:SetScript("OnEvent", function(_, event, unit)
-		self:OnEvent(event, unit)
-	end)
-end
-
-function Stats:OnEvent(event, unit)
-	if event == "UNIT_STATS" and unit ~= "player" then
-		return
+	local ratingBonus = GetCombatRatingBonus(CR_VERSATILITY_DAMAGE_DONE)
+	local effectBonus = GetVersatilityBonus(CR_VERSATILITY_DAMAGE_DONE)
+	if not HTF:IsSafeNumber(ratingBonus) or not HTF:IsSafeNumber(effectBonus) then
+		return nil
 	end
-
-	if event == "PLAYER_REGEN_DISABLED" then
-		self:ShowCombatRestriction()
-		return
-	end
-
-	self:RequestRefresh()
-end
-
-function Stats:IsVisible()
-	return HTF.Options and HTF.Options:IsPageVisible("stats")
-end
-
-function Stats:AttachView(view)
-	self.view = view
-	self:Refresh()
-end
-
-function Stats:RequestRefresh()
-	if not self:IsVisible() or self.refreshQueued then
-		return
-	end
-
-	self.refreshQueued = true
-	local function refresh()
-		self.refreshQueued = false
-		self:Refresh()
-	end
-
-	if C_Timer and C_Timer.After then
-		C_Timer.After(0.05, refresh)
-	else
-		refresh()
-	end
-end
-
-function Stats:AddValue(snapshot, key, label, value, formatter)
-	if not HTF:IsSafeNumber(value) then
-		snapshot[key] = { label = label, text = HTF.L.STAT_RESTRICTED, restricted = true }
-		return true
-	end
-
-	snapshot[key] = { label = label, text = formatter(value), restricted = false }
-	return false
+	return ratingBonus + effectBonus
 end
 
 function Stats:BuildSnapshot()
 	local snapshot = {}
 	local hasRestrictedValue = false
 
-	for _, stat in ipairs(primaryStats) do
-		local _, effectiveStat = UnitStat("player", stat.index)
-		local label = _G["SPELL_STAT" .. stat.index .. "_NAME"] or stat.fallback
-		if self:AddValue(snapshot, stat.key, label, effectiveStat, integerText) then
-			hasRestrictedValue = true
+	for _, definition in ipairs(self.STAT_DEFINITIONS) do
+		local key = definition.key
+		if self:IsStatVisible(key) then
+			local value
+			local formatter = percentText
+			if definition.primaryIndex then
+				if type(UnitStat) == "function" then
+					local _, effectiveStat = UnitStat("player", definition.primaryIndex)
+					value = effectiveStat
+				end
+				formatter = integerText
+			elseif key == "armor" then
+				if type(UnitArmor) == "function" then
+					local _, effectiveArmor = UnitArmor("player")
+					value = effectiveArmor
+				end
+				formatter = integerText
+			elseif key == "criticalStrike" then
+				value = self:GetDisplayedCritChance()
+			elseif key == "haste" then
+				if type(GetHaste) == "function" then
+					value = GetHaste()
+				end
+			elseif key == "mastery" then
+				if type(GetMasteryEffect) == "function" then
+					value = GetMasteryEffect()
+				end
+			elseif key == "versatility" then
+				value = self:GetVersatility()
+			elseif key == "lifesteal" then
+				if type(GetLifesteal) == "function" then
+					value = GetLifesteal()
+				end
+			elseif key == "avoidance" then
+				if type(GetAvoidance) == "function" then
+					value = GetAvoidance()
+				end
+			elseif key == "speed" then
+				if type(GetSpeed) == "function" then
+					value = GetSpeed()
+				end
+			elseif key == "dodge" then
+				if type(GetDodgeChance) == "function" then
+					value = GetDodgeChance()
+				end
+			elseif key == "parry" then
+				if type(GetParryChance) == "function" then
+					value = GetParryChance()
+				end
+			end
+
+			if self:AddValue(snapshot, key, value, formatter) then
+				hasRestrictedValue = true
+			end
 		end
-	end
-
-	local _, effectiveArmor = UnitArmor("player")
-	if self:AddValue(snapshot, "armor", _G.STAT_ARMOR or "护甲", effectiveArmor, integerText) then
-		hasRestrictedValue = true
-	end
-
-	if self:AddValue(snapshot, "criticalStrike", _G.STAT_CRITICAL_STRIKE or "暴击", self:GetDisplayedCritChance(), percentText) then
-		hasRestrictedValue = true
-	end
-
-	if self:AddValue(snapshot, "haste", _G.STAT_HASTE or "急速", GetHaste(), percentText) then
-		hasRestrictedValue = true
-	end
-
-	local masteryEffect = GetMasteryEffect()
-	if self:AddValue(snapshot, "mastery", _G.STAT_MASTERY or "精通", masteryEffect, percentText) then
-		hasRestrictedValue = true
-	end
-
-	local versatilityBonus
-	if type(GetCombatRatingBonus) == "function"
-		and type(GetVersatilityBonus) == "function"
-		and CR_VERSATILITY_DAMAGE_DONE then
-		local ratingBonus = GetCombatRatingBonus(CR_VERSATILITY_DAMAGE_DONE)
-		local effectBonus = GetVersatilityBonus(CR_VERSATILITY_DAMAGE_DONE)
-		if HTF:IsSafeNumber(ratingBonus) and HTF:IsSafeNumber(effectBonus) then
-			versatilityBonus = ratingBonus + effectBonus
-		end
-	end
-	if self:AddValue(snapshot, "versatility", _G.STAT_VERSATILITY or "全能", versatilityBonus, percentText) then
-		hasRestrictedValue = true
-	end
-
-	if self:AddValue(snapshot, "lifesteal", _G.STAT_LIFESTEAL or "吸血", GetLifesteal(), percentText) then
-		hasRestrictedValue = true
-	end
-
-	if self:AddValue(snapshot, "avoidance", _G.STAT_AVOIDANCE or "闪避", GetAvoidance(), percentText) then
-		hasRestrictedValue = true
-	end
-
-	if self:AddValue(snapshot, "speed", _G.STAT_SPEED or "速度", GetSpeed(), percentText) then
-		hasRestrictedValue = true
-	end
-
-	if self:AddValue(snapshot, "dodge", _G.DODGE or "躲闪", GetDodgeChance(), percentText) then
-		hasRestrictedValue = true
-	end
-
-	if self:AddValue(snapshot, "parry", _G.PARRY or "招架", GetParryChance(), percentText) then
-		hasRestrictedValue = true
 	end
 
 	return snapshot, hasRestrictedValue
 end
 
-function Stats:UpdateProfile()
-	if not self.view or not self.view.profile then
+function Stats:RenderSnapshot(snapshot, hasRestrictedValue)
+	if not self.overlay then
 		return
 	end
 
-	local name = HTF:SafeString(UnitName("player"), "—")
-	local localizedClass = HTF:SafeString(UnitClass("player"), "")
-	local level = UnitLevel("player")
-	local levelText = HTF:IsSafeNumber(level) and tostring(level) or "—"
-	local itemLevelText = "—"
-	if type(GetAverageItemLevel) == "function" then
-		-- 12.1 的第二返回值是已装备平均装等，与暴雪 PaperDollFrame 的显示口径一致。
-		local _, equippedItemLevel = GetAverageItemLevel()
-		if HTF:IsSafeNumber(equippedItemLevel) then
-			itemLevelText = string.format("%.1f", equippedItemLevel)
+	for _, definition in ipairs(self.STAT_DEFINITIONS) do
+		local value = snapshot[definition.key]
+		if value then
+			self.overlay.rows[definition.key]:SetText(string.format("%s: %s", self:GetStatLabel(definition.key), value.text or HTF.L.STAT_UNAVAILABLE))
 		end
 	end
 
-	self.view.profile:SetText(string.format("%s  |cff8994a8%s · 等级 %s · 装等 %s|r", name, localizedClass, levelText, itemLevelText))
+	if hasRestrictedValue then
+		self:SetOverlayStatus(HTF.L.STATS_PARTIALLY_RESTRICTED)
+	else
+		self:SetOverlayStatus("")
+	end
 end
 
-function Stats:RenderSnapshot(snapshot, hasRestrictedValue)
-	if not self.view then
-		return
-	end
-
-	for key, value in pairs(snapshot) do
-		local row = self.view.rows[key]
-		if row then
-			row.label:SetText(value.label or row.defaultLabel)
-			row.value:SetText(value.text or HTF.L.STAT_UNAVAILABLE)
-			if value.restricted then
-				row.value:SetTextColor(0.95, 0.72, 0.42)
-			else
-				row.value:SetTextColor(0.88, 0.94, 1.00)
-			end
-		end
-	end
-
-	self:UpdateProfile()
-	local timestamp = date and date("%H:%M:%S") or "--:--:--"
-	if hasRestrictedValue then
-		self.view.status:SetText(HTF.L.STATS_PARTIALLY_RESTRICTED)
-		self.view.status:SetTextColor(0.95, 0.72, 0.42)
-	else
-		self.view.status:SetText(string.format(HTF.L.STATS_UPDATED, timestamp))
-		self.view.status:SetTextColor(0.43, 0.91, 0.72)
+function Stats:SetOverlayStatus(text)
+	self.overlayStatus = text or ""
+	if self.overlay and self.overlay.status then
+		self.overlay.status:SetText(self.overlayStatus)
+		self:LayoutOverlay()
 	end
 end
 
 function Stats:ShowCombatRestriction()
-	if self.view and self:IsVisible() and HTF:GetSetting("showStats") then
-		self.view.status:SetText(HTF.L.STATS_IN_COMBAT)
-		self.view.status:SetTextColor(0.95, 0.72, 0.42)
+	if self:IsVisible() then
+		self:SetOverlayStatus(HTF.L.STATS_IN_COMBAT)
 	end
-end
-
-function Stats:ShowDisabledState()
-	if not self.view then
-		return
-	end
-
-	for _, row in pairs(self.view.rows) do
-		row.value:SetText(HTF.L.STAT_UNAVAILABLE)
-		row.value:SetTextColor(0.46, 0.51, 0.60)
-	end
-	self.view.status:SetText(HTF.L.STATS_DISABLED)
-	self.view.status:SetTextColor(0.65, 0.69, 0.76)
 end
 
 function Stats:Refresh()
-	if not self.view then
-		return
-	end
 	if not self:IsVisible() then
-		return
-	end
-	if not HTF:GetSetting("showStats") then
-		self:ShowDisabledState()
 		return
 	end
 	if InCombatLockdown and InCombatLockdown() then
@@ -287,5 +540,97 @@ function Stats:Refresh()
 
 	local snapshot, hasRestrictedValue = self:BuildSnapshot()
 	self:RenderSnapshot(snapshot, hasRestrictedValue)
-	HTF:Debug("角色属性已刷新。")
+	HTF:Debug("角色属性悬浮层已刷新。")
+end
+
+function Stats:IsStatVisible(key)
+	return HTF.db and HTF.db.statsVisibility and HTF.db.statsVisibility[key] == true
+end
+
+function Stats:SetStatVisible(key, visible)
+	if not definitionByKey[key] or not HTF.db then
+		return
+	end
+	HTF.db.statsVisibility[key] = visible == true
+	self:ApplyOverlaySettings()
+	self:RequestRefresh()
+	if HTF.Options and HTF.Options.RefreshStatSettings then
+		HTF.Options:RefreshStatSettings()
+	end
+	HTF:Debugf("属性显示项目已更新：%s = %s。", key, tostring(visible == true))
+end
+
+function Stats:GetStatColor(key)
+	local defaultColor = HTF.defaults.statsColors[key] or { 1, 1, 1 }
+	local color = HTF.db and HTF.db.statsColors and HTF.db.statsColors[key] or defaultColor
+	return color[1] or defaultColor[1], color[2] or defaultColor[2], color[3] or defaultColor[3]
+end
+
+function Stats:SetStatColor(key, r, g, b)
+	if not definitionByKey[key] or not HTF.db then
+		return
+	end
+	if type(r) ~= "number" or type(g) ~= "number" or type(b) ~= "number" then
+		return
+	end
+	HTF.db.statsColors[key] = { clamp(r, 0, 1), clamp(g, 0, 1), clamp(b, 0, 1) }
+	if self.overlay and self.overlay.rows[key] then
+		local savedR, savedG, savedB = self:GetStatColor(key)
+		self.overlay.rows[key]:SetTextColor(savedR, savedG, savedB, 1)
+	end
+	if HTF.Options and HTF.Options.RefreshStatSetting then
+		HTF.Options:RefreshStatSetting(key)
+	end
+end
+
+function Stats:GetFontSize()
+	return HTF.db and HTF.db.statsFontSize or HTF.defaults.statsFontSize
+end
+
+function Stats:SetFontSize(size)
+	if type(size) ~= "number" then
+		return
+	end
+	HTF:SetSetting("statsFontSize", clamp(math.floor(size + 0.5), self.MIN_FONT_SIZE, self.MAX_FONT_SIZE))
+end
+
+function Stats:ResetPosition()
+	local defaultPosition = HTF.defaults.statsPosition
+	HTF.db.statsPosition = {
+		point = defaultPosition.point,
+		relativePoint = defaultPosition.relativePoint,
+		x = defaultPosition.x,
+		y = defaultPosition.y,
+	}
+	self:ApplyOverlaySettings()
+	HTF:Notify(HTF.L.STATS_POSITION_RESET)
+	HTF:Debug("属性悬浮层位置已重置。")
+end
+
+function Stats:ResetColors()
+	HTF.db.statsColors = {}
+	for _, definition in ipairs(self.STAT_DEFINITIONS) do
+		HTF.db.statsColors[definition.key] = copyColor(HTF.defaults.statsColors[definition.key])
+	end
+	self:ApplyOverlaySettings()
+	if HTF.Options and HTF.Options.RefreshStatSettings then
+		HTF.Options:RefreshStatSettings()
+	end
+	HTF:Notify(HTF.L.STATS_COLORS_RESET)
+	HTF:Debug("属性悬浮层文字颜色已恢复默认。")
+end
+
+function Stats:GetVisibleStatCount()
+	local count = 0
+	for _, definition in ipairs(self.STAT_DEFINITIONS) do
+		if self:IsStatVisible(definition.key) then
+			count = count + 1
+		end
+	end
+	return count
+end
+
+function Stats:GetPositionSummary()
+	local position = HTF.db and HTF.db.statsPosition or HTF.defaults.statsPosition
+	return string.format("%s/%s %.1f %.1f", position.point, position.relativePoint, position.x, position.y)
 end
