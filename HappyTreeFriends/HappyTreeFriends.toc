@@ -1,0 +1,13 @@
+## Interface: 120100
+## Title: Happy Tree Friends
+## Notes: A refined collection of lightweight quality-of-life tools for WoW Retail.
+## Notes-zhCN: 轻量、精致的魔兽世界实用小工具合集。
+## Author: Happy Tree Friends
+## Version: 0.1.1
+## SavedVariables: HappyTreeFriendsDB
+
+Locales.lua
+Core.lua
+Merchant.lua
+Stats.lua
+Options.lua
