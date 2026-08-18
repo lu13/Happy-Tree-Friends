@@ -6,20 +6,20 @@ HTF.Stats = Stats
 Stats.MIN_FONT_SIZE = 10
 Stats.MAX_FONT_SIZE = 24
 Stats.STAT_DEFINITIONS = {
-	{ key = "strength", primaryIndex = 1, fallback = "力量" },
-	{ key = "agility", primaryIndex = 2, fallback = "敏捷" },
-	{ key = "stamina", primaryIndex = 3, fallback = "耐力" },
-	{ key = "intellect", primaryIndex = 4, fallback = "智力" },
-	{ key = "armor", globalLabel = "STAT_ARMOR", fallback = "护甲" },
-	{ key = "criticalStrike", globalLabel = "STAT_CRITICAL_STRIKE", fallback = "暴击" },
-	{ key = "haste", globalLabel = "STAT_HASTE", fallback = "急速" },
-	{ key = "mastery", globalLabel = "STAT_MASTERY", fallback = "精通" },
-	{ key = "versatility", globalLabel = "STAT_VERSATILITY", fallback = "全能" },
-	{ key = "lifesteal", globalLabel = "STAT_LIFESTEAL", fallback = "吸血" },
-	{ key = "avoidance", globalLabel = "STAT_AVOIDANCE", fallback = "闪避" },
-	{ key = "speed", globalLabel = "STAT_SPEED", fallback = "速度" },
-	{ key = "dodge", globalLabel = "DODGE", fallback = "躲闪" },
-	{ key = "parry", globalLabel = "PARRY", fallback = "招架" },
+	{ key = "strength", primaryIndex = 1, fallbackKey = "STAT_STRENGTH" },
+	{ key = "agility", primaryIndex = 2, fallbackKey = "STAT_AGILITY" },
+	{ key = "stamina", primaryIndex = 3, fallbackKey = "STAT_STAMINA" },
+	{ key = "intellect", primaryIndex = 4, fallbackKey = "STAT_INTELLECT" },
+	{ key = "armor", globalLabel = "STAT_ARMOR", fallbackKey = "STAT_ARMOR" },
+	{ key = "criticalStrike", globalLabel = "STAT_CRITICAL_STRIKE", fallbackKey = "STAT_CRITICAL_STRIKE" },
+	{ key = "haste", globalLabel = "STAT_HASTE", fallbackKey = "STAT_HASTE" },
+	{ key = "mastery", globalLabel = "STAT_MASTERY", fallbackKey = "STAT_MASTERY" },
+	{ key = "versatility", globalLabel = "STAT_VERSATILITY", fallbackKey = "STAT_VERSATILITY" },
+	{ key = "lifesteal", globalLabel = "STAT_LIFESTEAL", fallbackKey = "STAT_LIFESTEAL" },
+	{ key = "avoidance", globalLabel = "STAT_AVOIDANCE", fallbackKey = "STAT_AVOIDANCE" },
+	{ key = "speed", globalLabel = "STAT_SPEED", fallbackKey = "STAT_SPEED" },
+	{ key = "dodge", globalLabel = "DODGE", fallbackKey = "STAT_DODGE" },
+	{ key = "parry", globalLabel = "PARRY", fallbackKey = "STAT_PARRY" },
 }
 
 local definitionByKey = {}
@@ -85,9 +85,9 @@ function Stats:GetStatLabel(key)
 		return key
 	end
 	if definition.primaryIndex then
-		return _G["SPELL_STAT" .. definition.primaryIndex .. "_NAME"] or definition.fallback
+		return _G["SPELL_STAT" .. definition.primaryIndex .. "_NAME"] or HTF.L[definition.fallbackKey]
 	end
-	return (definition.globalLabel and _G[definition.globalLabel]) or definition.fallback
+	return (definition.globalLabel and _G[definition.globalLabel]) or HTF.L[definition.fallbackKey]
 end
 
 function Stats:NormalizeSettings()
@@ -242,7 +242,7 @@ function Stats:SavePosition()
 
 	local point, _, relativePoint, x, y = self.overlay:GetPoint(1)
 	if not VALID_POINTS[point] or not VALID_POINTS[relativePoint] or type(x) ~= "number" or type(y) ~= "number" then
-		HTF:Debug("属性悬浮层位置保存跳过：框体坐标不可用。")
+		HTF:Debug(HTF.L.DEBUG_STATS_POSITION_INVALID)
 		return
 	end
 
@@ -251,7 +251,7 @@ function Stats:SavePosition()
 	position.relativePoint = relativePoint
 	position.x = clamp(x, -4096, 4096)
 	position.y = clamp(y, -4096, 4096)
-	HTF:Debugf("属性悬浮层位置已保存：%s/%s %.1f %.1f。", point, relativePoint, position.x, position.y)
+	HTF:Debugf(HTF.L.DEBUG_STATS_POSITION_SAVED, point, relativePoint, position.x, position.y)
 end
 
 function Stats:LayoutOverlay()
@@ -548,7 +548,7 @@ function Stats:Refresh()
 
 	local snapshot, hasRestrictedValue = self:BuildSnapshot()
 	self:RenderSnapshot(snapshot, hasRestrictedValue)
-	HTF:Debug("角色属性悬浮层已刷新。")
+	HTF:Debug(HTF.L.DEBUG_STATS_REFRESHED)
 end
 
 function Stats:IsStatVisible(key)
@@ -565,7 +565,7 @@ function Stats:SetStatVisible(key, visible)
 	if HTF.Options and HTF.Options.RefreshStatSettings then
 		HTF.Options:RefreshStatSettings()
 	end
-	HTF:Debugf("属性显示项目已更新：%s = %s。", key, tostring(visible == true))
+	HTF:Debugf(HTF.L.DEBUG_STAT_VISIBILITY_UPDATED, key, tostring(visible == true))
 end
 
 function Stats:GetStatColor(key)
@@ -612,7 +612,7 @@ function Stats:ResetPosition()
 	}
 	self:ApplyOverlaySettings()
 	HTF:Notify(HTF.L.STATS_POSITION_RESET)
-	HTF:Debug("属性悬浮层位置已重置。")
+	HTF:Debug(HTF.L.STATS_POSITION_RESET)
 end
 
 function Stats:ResetColors()
@@ -625,7 +625,7 @@ function Stats:ResetColors()
 		HTF.Options:RefreshStatSettings()
 	end
 	HTF:Notify(HTF.L.STATS_COLORS_RESET)
-	HTF:Debug("属性悬浮层文字颜色已恢复默认。")
+	HTF:Debug(HTF.L.STATS_COLORS_RESET)
 end
 
 function Stats:GetVisibleStatCount()

@@ -1,7 +1,7 @@
 local ADDON_NAME, HTF = ...
 
 HTF.ADDON_NAME = ADDON_NAME
-HTF.VERSION = "0.2.1"
+HTF.VERSION = "0.3.0"
 HTF.MAX_DEBUG_LOG_ENTRIES = 80
 HTF.debugLog = {}
 
@@ -273,12 +273,12 @@ function HTF:FormatMoney(copper)
 	local parts = {}
 
 	if gold > 0 then
-		table.insert(parts, string.format("%d|cffffd700金|r", gold))
+		table.insert(parts, string.format("%d|cffffd700%s|r", gold, self.L.MONEY_GOLD))
 	end
 	if silver > 0 or gold > 0 then
-		table.insert(parts, string.format("%d|cffc7c7cf银|r", silver))
+		table.insert(parts, string.format("%d|cffc7c7cf%s|r", silver, self.L.MONEY_SILVER))
 	end
-	table.insert(parts, string.format("%d|cffeda55f铜|r", remainingCopper))
+	table.insert(parts, string.format("%d|cffeda55f%s|r", remainingCopper, self.L.MONEY_COPPER))
 
 	return table.concat(parts, " ")
 end
@@ -299,40 +299,40 @@ function HTF:HandleSlashCommand(input)
 	if command == "debug" then
 		local enabled = not self:GetSetting("debug")
 		self:SetSetting("debug", enabled)
-		self:Notify(enabled and "调试模式已开启。" or "调试模式已关闭。")
+		self:Notify(enabled and self.L.DEBUG_MODE_ENABLED or self.L.DEBUG_MODE_DISABLED)
 		if enabled then
-			self:Debug("调试模式已开启。")
+			self:Debug(self.L.DEBUG_MODE_ENABLED)
 		end
 		return
 	end
 
-	if command == "stats" or command == "属性" then
+	if command == "stats" or command == self.L.COMMAND_STATS_ALIAS then
 		self:OpenOptions("stats")
 		return
 	end
 
-	if command == "merchant" or command == "商人" then
+	if command == "merchant" or command == self.L.COMMAND_MERCHANT_ALIAS then
 		self:OpenOptions("merchant")
 		return
 	end
 
-	if command == "help" or command == "帮助" then
-		self:Notify("/htf — 设置；/htf stats — 角色属性；/htf debug — 调试开关；/htf dump — 可复制诊断报告；/htf clearlog — 清空日志。")
+	if command == "help" or command == self.L.COMMAND_HELP_ALIAS then
+		self:Notify(self.L.SLASH_HELP)
 		return
 	end
 
-	if command == "dump" or command == "诊断" then
+	if command == "dump" or command == self.L.COMMAND_DUMP_ALIAS then
 		if self.Options and self.Options.OpenDiagnosticReport then
 			self.Options:OpenDiagnosticReport()
 		else
-			self:Notify("诊断界面将在角色进入世界后可用。")
+			self:Notify(self.L.DIAGNOSTIC_UNAVAILABLE)
 		end
 		return
 	end
 
-	if command == "clearlog" or command == "清空日志" then
+	if command == "clearlog" or command == self.L.COMMAND_CLEAR_LOG_ALIAS then
 		self:ClearDebugLog()
-		self:Notify("调试日志已清空。")
+		self:Notify(self.L.DEBUG_CLEARED)
 		return
 	end
 
@@ -366,7 +366,7 @@ function HTF:Initialize()
 	end
 
 	self.initialized = true
-	self:Debug("初始化完成。")
+	self:Debug(self.L.DEBUG_INITIALIZED)
 end
 
 local bootstrapFrame = CreateFrame("Frame")

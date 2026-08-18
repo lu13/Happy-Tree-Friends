@@ -102,18 +102,21 @@ function Options:CreateToggleRow(parent, yOffset, settingKey, title, description
 
 	function toggle:Render(value)
 		self.knob:ClearAllPoints()
+		self.state:ClearAllPoints()
 		if value then
 			self:SetBackdropColor(COLORS.accentMuted[1], COLORS.accentMuted[2], COLORS.accentMuted[3], COLORS.accentMuted[4])
 			self:SetBackdropBorderColor(COLORS.accent[1], COLORS.accent[2], COLORS.accent[3], COLORS.accent[4])
 			self.knob:SetColorTexture(COLORS.accent[1], COLORS.accent[2], COLORS.accent[3], 1)
 			self.knob:SetPoint("RIGHT", -3, 0)
-			self.state:SetText("开")
+			self.state:SetText(HTF.L.TOGGLE_ON)
+			self.state:SetPoint("LEFT", 5, 0)
 		else
 			self:SetBackdropColor(COLORS.disabled[1], COLORS.disabled[2], COLORS.disabled[3], COLORS.disabled[4])
 			self:SetBackdropBorderColor(COLORS.border[1], COLORS.border[2], COLORS.border[3], COLORS.border[4])
 			self.knob:SetColorTexture(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3], 1)
 			self.knob:SetPoint("LEFT", 3, 0)
-			self.state:SetText("关")
+			self.state:SetText(HTF.L.TOGGLE_OFF)
+			self.state:SetPoint("RIGHT", -4, 0)
 		end
 	end
 
@@ -259,7 +262,7 @@ function Options:CreateOverviewPage(page)
 	card:SetHeight(118)
 	applyBackdrop(card, COLORS.panel, COLORS.border)
 
-	local title = createText(card, "GameFontNormal", "轻松管理你的日常功能", 14, COLORS.text)
+	local title = createText(card, "GameFontNormal", HTF.L.OVERVIEW_INTRO, 14, COLORS.text)
 	title:SetPoint("TOPLEFT", 16, -15)
 
 	local body = createText(card, "GameFontHighlightSmall", HTF.L.SETTINGS_HELP, 12, COLORS.muted)
@@ -268,7 +271,7 @@ function Options:CreateOverviewPage(page)
 	body:SetJustifyH("LEFT")
 	body:SetJustifyV("TOP")
 
-	local statusTitle = createText(page, "GameFontNormal", "功能状态", 14, COLORS.text)
+	local statusTitle = createText(page, "GameFontNormal", HTF.L.FEATURE_STATUS, 14, COLORS.text)
 	statusTitle:SetPoint("TOPLEFT", card, "BOTTOMLEFT", 0, -24)
 	statusTitle:SetPoint("TOPRIGHT", card, "BOTTOMRIGHT", 0, -24)
 	statusTitle:SetJustifyH("LEFT")
@@ -303,7 +306,7 @@ function Options:CreateOverviewPage(page)
 end
 
 function Options:CreateMerchantPage(page)
-	self:AddPageHeader(page, HTF.L.MERCHANT, "按你的习惯设置修理、售卖与操作提示。")
+	self:AddPageHeader(page, HTF.L.MERCHANT, HTF.L.MERCHANT_PAGE_HELP)
 
 	self:CreateToggleRow(page, -84, "autoRepair", HTF.L.AUTO_REPAIR, HTF.L.AUTO_REPAIR_DESC)
 	self:CreateToggleRow(page, -156, "repairFromGuild", HTF.L.REPAIR_FROM_GUILD, HTF.L.REPAIR_FROM_GUILD_DESC)
@@ -316,7 +319,7 @@ function Options:CreateMerchantPage(page)
 	note:SetHeight(88)
 	applyBackdrop(note, COLORS.sidebar, COLORS.border)
 
-	local noteText = createText(note, "GameFontHighlightSmall", HTF.L.AUTO_ACTIONS_NOTICE .. " 公会维修开启后，有权限时优先使用可用额度，不足部分由个人金币补足；关闭后只用个人金币。自动售卖只处理可出售的灰色物品。", 11, COLORS.muted)
+	local noteText = createText(note, "GameFontHighlightSmall", HTF.L.AUTO_ACTIONS_NOTICE, 11, COLORS.muted)
 	noteText:SetPoint("TOPLEFT", 14, -13)
 	noteText:SetPoint("TOPRIGHT", -14, -13)
 	noteText:SetJustifyH("LEFT")
@@ -357,12 +360,12 @@ function Options:CreateStatSettingRow(parent, column, yOffset, key, label)
 		if visible then
 			self.indicator:SetColorTexture(COLORS.accent[1], COLORS.accent[2], COLORS.accent[3], 1)
 			self.label:SetTextColor(r, g, b, 1)
-			self.state:SetText("显示")
+			self.state:SetText(HTF.L.STAT_VISIBLE)
 			self.state:SetTextColor(COLORS.accent[1], COLORS.accent[2], COLORS.accent[3], 1)
 		else
 			self.indicator:SetColorTexture(COLORS.disabled[1], COLORS.disabled[2], COLORS.disabled[3], 1)
 			self.label:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3], COLORS.muted[4])
-			self.state:SetText("隐藏")
+			self.state:SetText(HTF.L.STAT_HIDDEN)
 			self.state:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3], COLORS.muted[4])
 		end
 	end
@@ -382,7 +385,7 @@ function Options:CreateStatSettingRow(parent, column, yOffset, key, label)
 end
 
 function Options:CreateStatsPage(page)
-	self:AddPageHeader(page, HTF.L.CHARACTER_STATS, "自定义游戏画面中的属性悬浮层，调整位置、字号、显示项目与配色。")
+	self:AddPageHeader(page, HTF.L.CHARACTER_STATS, HTF.L.STATS_PAGE_HELP)
 	self.statsDisplayToggleRow = self:CreateCompactToggleRow(page, "left", -84, "showStats", HTF.L.SHOW_STATS, HTF.L.SHOW_STATS_DESC)
 	self.statsLockToggleRow = self:CreateCompactToggleRow(page, "right", -84, "statsLocked", HTF.L.LOCK_STATS, HTF.L.LOCK_STATS_DESC)
 
@@ -415,14 +418,14 @@ function Options:CreateStatsPage(page)
 	end)
 
 	local resetColorsButton = createActionButton(controlCard, HTF.L.STATS_RESET_COLORS)
-	resetColorsButton:SetSize(88, 26)
+	resetColorsButton:SetSize(96, 26)
 	resetColorsButton:SetPoint("RIGHT", controlCard, "RIGHT", -12, 0)
 	resetColorsButton:SetScript("OnClick", function()
 		HTF.Stats:ResetColors()
 	end)
 
 	local resetPositionButton = createActionButton(controlCard, HTF.L.STATS_RESET_POSITION)
-	resetPositionButton:SetSize(88, 26)
+	resetPositionButton:SetSize(110, 26)
 	resetPositionButton:SetPoint("RIGHT", resetColorsButton, "LEFT", -8, 0)
 	resetPositionButton:SetScript("OnClick", function()
 		HTF.Stats:ResetPosition()
@@ -489,7 +492,7 @@ end
 
 function Options:CreateDebugPage(page)
 	local options = self
-	self:AddPageHeader(page, HTF.L.DEBUG, "遇到问题时，可在这里记录运行信息并生成诊断报告。")
+	self:AddPageHeader(page, HTF.L.DEBUG, HTF.L.DEBUG_PAGE_HELP)
 	self:CreateToggleRow(page, -96, "debug", HTF.L.DEBUG_MODE, HTF.L.DEBUG_MODE_DESC)
 	self.showingDiagnosticReport = false
 
@@ -510,7 +513,7 @@ function Options:CreateDebugPage(page)
 	end)
 
 	local reportButton = createActionButton(page, HTF.L.DEBUG_REPORT)
-	reportButton:SetSize(92, 28)
+	reportButton:SetSize(116, 28)
 	reportButton:SetPoint("RIGHT", clearButton, "LEFT", -8, 0)
 	reportButton:SetScript("OnClick", function()
 		if options.showingDiagnosticReport then
@@ -624,7 +627,7 @@ function Options:CreatePanel()
 	brand:SetPoint("TOPLEFT", 18, -22)
 	local tree = createText(sidebar, "GameFontNormalLarge", "Tree Friends", 22, COLORS.accent)
 	tree:SetPoint("TOPLEFT", brand, "BOTTOMLEFT", 0, -1)
-	local version = createText(sidebar, "GameFontHighlightSmall", "版本 " .. HTF.VERSION, 10, COLORS.muted)
+	local version = createText(sidebar, "GameFontHighlightSmall", string.format(HTF.L.VERSION_LABEL, HTF.VERSION), 10, COLORS.muted)
 	version:SetPoint("TOPLEFT", tree, "BOTTOMLEFT", 0, -7)
 
 	self:CreateNavigationButton(sidebar, "overview", HTF.L.OVERVIEW, -116)
@@ -634,7 +637,7 @@ function Options:CreatePanel()
 
 	local sidebarHelp = createText(sidebar, "GameFontHighlightSmall", "/htf", 12, COLORS.accent)
 	sidebarHelp:SetPoint("BOTTOMLEFT", 18, 23)
-	local sidebarHint = createText(sidebar, "GameFontHighlightSmall", "打开设置", 10, COLORS.muted)
+	local sidebarHint = createText(sidebar, "GameFontHighlightSmall", HTF.L.OPEN_SETTINGS, 10, COLORS.muted)
 	sidebarHint:SetPoint("BOTTOMLEFT", sidebarHelp, "TOPLEFT", 0, 3)
 
 	local content = CreateFrame("Frame", nil, panel)
@@ -738,11 +741,11 @@ function Options:RefreshOverview()
 		local enabled = HTF:GetSetting(entry.settingKey)
 		if enabled then
 			entry.row.dot:SetColorTexture(COLORS.accent[1], COLORS.accent[2], COLORS.accent[3], 1)
-			entry.row.value:SetText("已开启")
+			entry.row.value:SetText(HTF.L.STATUS_ENABLED)
 			entry.row.value:SetTextColor(COLORS.accent[1], COLORS.accent[2], COLORS.accent[3], 1)
 		else
 			entry.row.dot:SetColorTexture(COLORS.disabled[1], COLORS.disabled[2], COLORS.disabled[3], 1)
-			entry.row.value:SetText("已关闭")
+			entry.row.value:SetText(HTF.L.STATUS_DISABLED)
 			entry.row.value:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3], COLORS.muted[4])
 		end
 	end
@@ -780,7 +783,7 @@ end
 
 function Options:Open(page)
 	if not self.panel then
-		HTF:Notify("设置界面将在角色进入世界后可用。")
+		HTF:Notify(HTF.L.SETTINGS_UNAVAILABLE)
 		return
 	end
 
@@ -799,7 +802,7 @@ end
 
 function Options:OpenDiagnosticReport()
 	if not self.panel then
-		HTF:Notify("诊断界面将在角色进入世界后可用。")
+		HTF:Notify(HTF.L.DIAGNOSTIC_UNAVAILABLE)
 		return
 	end
 

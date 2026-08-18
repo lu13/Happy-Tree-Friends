@@ -15,6 +15,10 @@ local function contains(haystack, needle, message)
 	check(type(haystack) == "string" and haystack:find(needle, 1, true) ~= nil, message or ("missing text: " .. needle))
 end
 
+local testLocale = os.getenv and os.getenv("HTF_TEST_LOCALE") or "zhCN"
+check(testLocale == "zhCN" or testLocale == "enUS", "HTF_TEST_LOCALE must be zhCN or enUS")
+local activeClientLocale = testLocale
+
 local SECRET = setmetatable({}, {
 	__tostring = function()
 		error("secret value must not be converted to text")
@@ -414,7 +418,8 @@ function UnitName()
 end
 
 function UnitClass()
-	return secretIdentity and SECRET or "德鲁伊", "DRUID", 11
+	local localizedClass = testLocale == "zhCN" and "德鲁伊" or "Druid"
+	return secretIdentity and SECRET or localizedClass, "DRUID", 11
 end
 
 function UnitLevel()
@@ -532,7 +537,7 @@ function GetBuildInfo()
 end
 
 function GetLocale()
-	return "zhCN"
+	return activeClientLocale
 end
 
 ColorPickerFrame = {
@@ -562,6 +567,16 @@ for index = 1, 82 do
 	end
 end
 
+activeClientLocale = "frFR"
+local fallbackLocaleHTF = {}
+local fallbackLocaleChunk, fallbackLocaleError = loadfile("HappyTreeFriends/Locales.lua")
+check(fallbackLocaleChunk ~= nil, fallbackLocaleError)
+fallbackLocaleChunk("HappyTreeFriends", fallbackLocaleHTF)
+equal(fallbackLocaleHTF.CLIENT_LOCALE, "frFR", "unsupported client locale is recorded")
+equal(fallbackLocaleHTF.LOCALE, "enUS", "unsupported client locale falls back to English")
+equal(fallbackLocaleHTF.L.SETTINGS, "Settings", "unsupported client locale receives English text")
+activeClientLocale = testLocale
+
 local HTF = {}
 for _, path in ipairs({
 	"HappyTreeFriends/Locales.lua",
@@ -576,7 +591,37 @@ for _, path in ipairs({
 end
 
 fireEvent("ADDON_LOADED", "HappyTreeFriends")
-equal(HTF.VERSION, "0.2.1", "addon version")
+equal(HTF.VERSION, "0.3.0", "addon version")
+equal(HTF.LOCALE, testLocale, "addon selects the active supported locale")
+equal(HTF.CLIENT_LOCALE, testLocale, "addon records the client locale")
+equal(HTF.L.SETTINGS, testLocale == "zhCN" and "设置" or "Settings", "selected locale exposes translated settings text")
+for key, value in pairs(HTF.LOCALES.enUS) do
+	check(type(value) == "string" and value ~= "", "English locale value is non-empty: " .. key)
+	check(type(HTF.LOCALES.zhCN[key]) == "string" and HTF.LOCALES.zhCN[key] ~= "", "zhCN locale includes English key: " .. key)
+end
+for key in pairs(HTF.LOCALES.zhCN) do
+	check(HTF.LOCALES.enUS[key] ~= nil, "English locale includes zhCN key: " .. key)
+end
+for _, definition in ipairs(HTF.Stats.STAT_DEFINITIONS) do
+	check(HTF.LOCALES.enUS[definition.fallbackKey] ~= nil, "English stat fallback exists: " .. definition.key)
+	check(HTF.LOCALES.zhCN[definition.fallbackKey] ~= nil, "zhCN stat fallback exists: " .. definition.key)
+end
+local formatCases = {
+	VERSION_LABEL = { "0.3.0" },
+	REPAIRED_PERSONAL = { "1g" },
+	REPAIRED_GUILD = { "1g" },
+	REPAIRED_MIXED = { "1g" },
+	SOLD_JUNK = { 3 },
+	DEBUG_REPAIR_COMPLETED = { "1g", "personal" },
+	DEBUG_JUNK_SOLD = { 3 },
+	DEBUG_STATS_POSITION_SAVED = { "TOP", "TOP", 1, -1 },
+	DEBUG_STAT_VISIBILITY_UPDATED = { "haste", "true" },
+}
+local unpackValues = table.unpack or unpack
+for key, arguments in pairs(formatCases) do
+	local ok = pcall(string.format, HTF.L[key], unpackValues(arguments))
+	check(ok, "selected locale format placeholders are valid: " .. key)
+end
 equal(#HTF.debugLog, 80, "saved log is normalized to its cap")
 equal(HTF.debugLog[1], "seed-2", "normalization keeps the newest valid entries")
 check(HTF.debugLog == HappyTreeFriendsDB.debugLog, "runtime log must share the SavedVariables table")
@@ -611,7 +656,7 @@ end
 
 fireEvent("PLAYER_ENTERING_WORLD")
 flushTimers()
-equal(HTF.Stats.overlay.rows.criticalStrike:GetText(), "暴击: 15.25%", "HUD crit matches PaperDoll max melee/ranged/spell behavior")
+equal(HTF.Stats.overlay.rows.criticalStrike:GetText(), HTF.Stats:GetStatLabel("criticalStrike") .. ": 15.25%", "HUD crit matches PaperDoll max melee/ranged/spell behavior")
 local sawFirstSpellSchool = false
 local sawLastSpellSchool = false
 for _, school in ipairs(spellSchoolsRead) do
@@ -629,6 +674,14 @@ check(registeredCategory and registeredCategory.registered, "options panel is re
 equal(HTF.Options:GetCategoryID(), 120101, "registered category exposes its numeric ID")
 check(HTF.Options.debugScrollFrame.ScrollBar ~= nil, "12.1 scroll template exposes its scrollbar through parentKey")
 equal(HTF.Options.debugScrollFrame:GetName(), nil, "anonymous 12.1 scroll template remains supported")
+local localizedToggle = HTF.Options.toggles[1].toggle
+equal(localizedToggle.state:GetText(), HTF.L.TOGGLE_OFF, "disabled toggle uses the selected locale")
+equal(localizedToggle.state.points[1][1], "RIGHT", "disabled toggle text stays opposite the knob")
+localizedToggle:Render(true)
+equal(localizedToggle.state:GetText(), HTF.L.TOGGLE_ON, "enabled toggle uses the selected locale")
+equal(localizedToggle.state.points[1][1], "LEFT", "enabled toggle text stays opposite the knob")
+localizedToggle:Render(false)
+check(HTF.Options.debugReportButton.width >= 116, "diagnostic button accommodates its English label")
 
 local customerCopy = {}
 for _, frame in ipairs(frames) do
@@ -637,7 +690,11 @@ for _, frame in ipairs(frames) do
 	end
 end
 local allCustomerCopy = table.concat(customerCopy, "\n")
-for _, developerPhrase in ipairs({ "OnUpdate", "轮询", "扫描背包", "MVP", "12.1 原生规则" }) do
+contains(allCustomerCopy, HTF.L.OVERVIEW_INTRO, "overview uses the selected locale")
+contains(allCustomerCopy, HTF.L.MERCHANT_PAGE_HELP, "merchant page uses the selected locale")
+contains(allCustomerCopy, HTF.L.STATS_PAGE_HELP, "stats page uses the selected locale")
+contains(allCustomerCopy, HTF.L.DEBUG_PAGE_HELP, "debug page uses the selected locale")
+for _, developerPhrase in ipairs({ "OnUpdate", "轮询", "扫描背包", "MVP", "12.1 原生规则", "continuous polling", "bag scanning" }) do
 	check(not allCustomerCopy:find(developerPhrase, 1, true), "customer-facing UI omits developer phrase: " .. developerPhrase)
 end
 
@@ -696,7 +753,7 @@ local critOk, critError = pcall(function()
 	HTF.Stats:Refresh()
 end)
 check(critOk, "secret crit values must not be compared or formatted in the HUD: " .. tostring(critError))
-equal(HTF.Stats.overlay.rows.criticalStrike:GetText(), "暴击: " .. HTF.L.STAT_RESTRICTED, "secret crit is marked restricted in the HUD")
+equal(HTF.Stats.overlay.rows.criticalStrike:GetText(), HTF.Stats:GetStatLabel("criticalStrike") .. ": " .. HTF.L.STAT_RESTRICTED, "secret crit is marked restricted in the HUD")
 equal(HTF.Stats.overlay.status:GetText(), HTF.L.STATS_PARTIALLY_RESTRICTED, "restricted stats produce a safe HUD status")
 secretCrit = false
 
@@ -705,7 +762,7 @@ local hasteOk, hasteError = pcall(function()
 	HTF.Stats:Refresh()
 end)
 check(hasteOk, "secret percentage values must not enter boolean or formatting operations: " .. tostring(hasteError))
-equal(HTF.Stats.overlay.rows.haste:GetText(), "急速: " .. HTF.L.STAT_RESTRICTED, "secret haste is marked restricted in the HUD")
+equal(HTF.Stats.overlay.rows.haste:GetText(), HTF.Stats:GetStatLabel("haste") .. ": " .. HTF.L.STAT_RESTRICTED, "secret haste is marked restricted in the HUD")
 secretHaste = false
 HTF.Stats:Refresh()
 
@@ -716,8 +773,8 @@ local broadSecretStatsOk, broadSecretStatsError = pcall(function()
 	HTF.Stats:Refresh()
 end)
 check(broadSecretStatsOk, "secret primary/armor/secondary stats must not be formatted or combined: " .. tostring(broadSecretStatsError))
-equal(HTF.Stats.overlay.rows.strength:GetText(), "力量: " .. HTF.L.STAT_RESTRICTED, "secret primary stat is marked restricted")
-equal(HTF.Stats.overlay.rows.armor:GetText(), "护甲: " .. HTF.L.STAT_RESTRICTED, "secret armor is marked restricted")
+equal(HTF.Stats.overlay.rows.strength:GetText(), HTF.Stats:GetStatLabel("strength") .. ": " .. HTF.L.STAT_RESTRICTED, "secret primary stat is marked restricted")
+equal(HTF.Stats.overlay.rows.armor:GetText(), HTF.Stats:GetStatLabel("armor") .. ": " .. HTF.L.STAT_RESTRICTED, "secret armor is marked restricted")
 for _, key in ipairs({ "mastery", "versatility", "lifesteal", "avoidance", "speed", "dodge", "parry" }) do
 	contains(HTF.Stats.overlay.rows[key]:GetText(), HTF.L.STAT_RESTRICTED, "secret secondary stat is marked restricted: " .. key)
 end
@@ -1019,4 +1076,4 @@ end)
 check(secretLogOk, "secret debug messages must not be stringified: " .. tostring(secretLogError))
 contains(HTF.debugLog[1], "<restricted>", "secret debug messages use a safe placeholder")
 
-print(string.format("Happy Tree Friends headless checks passed: %d", checks))
+print(string.format("Happy Tree Friends %s headless checks passed: %d", testLocale, checks))

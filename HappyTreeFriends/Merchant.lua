@@ -23,13 +23,13 @@ function Merchant:OnEvent(event)
 		self.merchantOpen = false
 		self.pendingRun = false
 		self.runToken = (self.runToken or 0) + 1
-		HTF:Debug("商人窗口已关闭。")
+		HTF:Debug(HTF.L.DEBUG_MERCHANT_CLOSED)
 		return
 	end
 	if event == "PLAYER_REGEN_ENABLED" then
 		if self.merchantOpen and self.pendingRun then
 			self.pendingRun = false
-			HTF:Debug("已脱离战斗，补跑被延后的商人操作。")
+			HTF:Debug(HTF.L.DEBUG_MERCHANT_RESUMED)
 			self:ScheduleRun(0)
 		end
 		return
@@ -38,7 +38,7 @@ function Merchant:OnEvent(event)
 	self.merchantOpen = true
 	self.pendingRun = false
 	self.runToken = (self.runToken or 0) + 1
-	HTF:Debug("检测到商人窗口，准备执行已启用的日常操作。")
+	HTF:Debug(HTF.L.DEBUG_MERCHANT_OPENED)
 	self:ScheduleRun(0.1)
 end
 
@@ -60,23 +60,23 @@ end
 
 function Merchant:TryAutoRepair()
 	if type(CanMerchantRepair) ~= "function" or type(GetRepairAllCost) ~= "function" or type(RepairAllItems) ~= "function" then
-		HTF:Debug("自动修理跳过：修理 API 不可用。")
+		HTF:Debug(HTF.L.DEBUG_REPAIR_API_UNAVAILABLE)
 		return nil
 	end
 
 	local merchantCanRepair = CanMerchantRepair()
 	if HTF:IsSecretValue(merchantCanRepair) or not merchantCanRepair then
-		HTF:Debug("自动修理跳过：当前商人不提供修理。")
+		HTF:Debug(HTF.L.DEBUG_REPAIR_UNSUPPORTED)
 		return nil
 	end
 
 	local repairCost, canRepair = GetRepairAllCost()
 	if HTF:IsSecretValue(repairCost) or HTF:IsSecretValue(canRepair) then
-		HTF:Debug("自动修理跳过：修理费用在当前场景受限。")
+		HTF:Debug(HTF.L.DEBUG_REPAIR_COST_RESTRICTED)
 		return nil
 	end
 	if not canRepair or not HTF:IsSafeNumber(repairCost) or repairCost <= 0 then
-		HTF:Debug("自动修理跳过：没有需要修理的装备。")
+		HTF:Debug(HTF.L.DEBUG_REPAIR_NOT_NEEDED)
 		return nil
 	end
 
@@ -102,16 +102,16 @@ function Merchant:TryAutoRepair()
 					end
 					useGuild = guildAvailable > 0
 					if not useGuild then
-						HTF:Debug("公会修理回退：当前可用公会维修额度为 0，改用个人金币。")
+						HTF:Debug(HTF.L.DEBUG_GUILD_FUNDS_EMPTY)
 					end
 				else
-					HTF:Debug("公会修理回退：公会维修额度当前不可读取，改用个人金币。")
+					HTF:Debug(HTF.L.DEBUG_GUILD_FUNDS_RESTRICTED)
 				end
 			else
-				HTF:Debug("公会修理回退：角色当前没有公会维修权限，改用个人金币。")
+				HTF:Debug(HTF.L.DEBUG_GUILD_PERMISSION_DENIED)
 			end
 		else
-			HTF:Debug("公会修理回退：公会维修权限 API 不可用，改用个人金币。")
+			HTF:Debug(HTF.L.DEBUG_GUILD_PERMISSION_API_UNAVAILABLE)
 		end
 	end
 
@@ -122,7 +122,7 @@ function Merchant:TryAutoRepair()
 			money = GetMoney()
 		end
 		if not HTF:IsSafeNumber(money) or money < personalNeeded then
-			HTF:Debug("自动修理跳过：可用的公会维修额度与个人金币合计不足。")
+			HTF:Debug(HTF.L.DEBUG_REPAIR_INSUFFICIENT_FUNDS)
 			return false
 		end
 	end
@@ -130,12 +130,13 @@ function Merchant:TryAutoRepair()
 	if useGuild then
 		RepairAllItems(true)
 		local source = guildAvailable >= repairCost and "guild" or "mixed"
-		HTF:Debugf("已执行自动修理，费用：%s，资金来源：%s。", HTF:FormatMoney(repairCost), source == "guild" and "公会银行" or "公会银行 + 个人金币")
+		local sourceLabel = source == "guild" and HTF.L.DEBUG_SOURCE_GUILD or HTF.L.DEBUG_SOURCE_MIXED
+		HTF:Debugf(HTF.L.DEBUG_REPAIR_COMPLETED, HTF:FormatMoney(repairCost), sourceLabel)
 		return { cost = repairCost, source = source }
 	end
 
 	RepairAllItems()
-	HTF:Debugf("已执行自动修理，费用：%s，资金来源：个人金币。", HTF:FormatMoney(repairCost))
+	HTF:Debugf(HTF.L.DEBUG_REPAIR_COMPLETED, HTF:FormatMoney(repairCost), HTF.L.DEBUG_SOURCE_PERSONAL)
 	return { cost = repairCost, source = "personal" }
 end
 
@@ -143,22 +144,22 @@ function Merchant:TryAutoSellJunk()
 	if type(C_MerchantFrame) ~= "table"
 		or type(C_MerchantFrame.GetNumJunkItems) ~= "function"
 		or type(C_MerchantFrame.SellAllJunkItems) ~= "function" then
-		HTF:Debug("自动售卖跳过：C_MerchantFrame API 不可用。")
+		HTF:Debug(HTF.L.DEBUG_JUNK_API_UNAVAILABLE)
 		return nil
 	end
 
 	local junkCount = C_MerchantFrame.GetNumJunkItems()
 	if not HTF:IsSafeNumber(junkCount) then
-		HTF:Debug("自动售卖跳过：灰色物品数量在当前场景受限。")
+		HTF:Debug(HTF.L.DEBUG_JUNK_COUNT_RESTRICTED)
 		return nil
 	end
 	if junkCount <= 0 then
-		HTF:Debug("自动售卖跳过：背包中没有可售卖的灰色物品。")
+		HTF:Debug(HTF.L.DEBUG_JUNK_EMPTY)
 		return nil
 	end
 
 	C_MerchantFrame.SellAllJunkItems()
-	HTF:Debugf("已调用 C_MerchantFrame.SellAllJunkItems，处理数量：%d。", junkCount)
+	HTF:Debugf(HTF.L.DEBUG_JUNK_SOLD, junkCount)
 	return junkCount
 end
 
@@ -168,7 +169,7 @@ function Merchant:RunMerchantActions()
 	end
 	if InCombatLockdown and InCombatLockdown() then
 		self.pendingRun = true
-		HTF:Debug("商人操作跳过：战斗锁定中。")
+		HTF:Debug(HTF.L.DEBUG_MERCHANT_COMBAT_LOCKED)
 		return
 	end
 	self.pendingRun = false
