@@ -1,7 +1,7 @@
 ## Interface: 120100
 ## Title: Happy Tree Friends
-## Notes: A refined collection of lightweight quality-of-life tools for WoW Retail.
-## Notes-zhCN: 轻量、精致的魔兽世界实用小工具合集。
+## Notes: An event-driven WoW Retail toolkit with safe merchant automation, a session ledger, friendly names, and a customizable adventure HUD.
+## Notes-zhCN: 事件驱动的正式服日常工具：安全修理/售灰装、会话账本、友方仅姓名和可定制冒险状态悬浮层。
 ## Author: Happy Tree Friends
 ## Version: 0.5.0
 ## SavedVariables: HappyTreeFriendsDB
