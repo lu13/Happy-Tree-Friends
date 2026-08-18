@@ -323,6 +323,39 @@ local function fireEvent(event, ...)
 	end
 end
 
+local friendlyPlayerNamesCVar = "UnitNameFriendlyPlayerName"
+local friendlyPlayerNameplatesCVar = "nameplateShowFriendlyPlayers"
+local friendlyPlayerNamesOnlyCVar = "nameplateShowOnlyNameForFriendlyPlayerUnits"
+local cvarValues = {
+	[friendlyPlayerNamesCVar] = "0",
+	[friendlyPlayerNameplatesCVar] = "0",
+	[friendlyPlayerNamesOnlyCVar] = "0",
+}
+local cvarSetFailures = {}
+local cvarSetCalls = {}
+
+C_CVar = {
+	GetCVar = function(cvarName)
+		return cvarValues[cvarName]
+	end,
+	SetCVar = function(cvarName, value)
+		if cvarSetFailures[cvarName] or cvarValues[cvarName] == nil then
+			return false
+		end
+		cvarValues[cvarName] = tostring(value)
+		table.insert(cvarSetCalls, { name = cvarName, value = tostring(value) })
+		return true
+	end,
+}
+
+function GetCVar(cvarName)
+	return C_CVar.GetCVar(cvarName)
+end
+
+function SetCVar(cvarName, value)
+	return C_CVar.SetCVar(cvarName, value)
+end
+
 local combatLocked = false
 function InCombatLockdown()
 	return combatLocked
@@ -581,6 +614,7 @@ local HTF = {}
 for _, path in ipairs({
 	"HappyTreeFriends/Locales.lua",
 	"HappyTreeFriends/Core.lua",
+	"HappyTreeFriends/FriendlyNames.lua",
 	"HappyTreeFriends/Merchant.lua",
 	"HappyTreeFriends/Stats.lua",
 	"HappyTreeFriends/Options.lua",
@@ -591,7 +625,7 @@ for _, path in ipairs({
 end
 
 fireEvent("ADDON_LOADED", "HappyTreeFriends")
-equal(HTF.VERSION, "0.3.0", "addon version")
+equal(HTF.VERSION, "0.4.0", "addon version")
 equal(HTF.LOCALE, testLocale, "addon selects the active supported locale")
 equal(HTF.CLIENT_LOCALE, testLocale, "addon records the client locale")
 equal(HTF.L.SETTINGS, testLocale == "zhCN" and "设置" or "Settings", "selected locale exposes translated settings text")
@@ -607,7 +641,7 @@ for _, definition in ipairs(HTF.Stats.STAT_DEFINITIONS) do
 	check(HTF.LOCALES.zhCN[definition.fallbackKey] ~= nil, "zhCN stat fallback exists: " .. definition.key)
 end
 local formatCases = {
-	VERSION_LABEL = { "0.3.0" },
+	VERSION_LABEL = { "0.4.0" },
 	REPAIRED_PERSONAL = { "1g" },
 	REPAIRED_GUILD = { "1g" },
 	REPAIRED_MIXED = { "1g" },
@@ -616,6 +650,7 @@ local formatCases = {
 	DEBUG_JUNK_SOLD = { 3 },
 	DEBUG_STATS_POSITION_SAVED = { "TOP", "TOP", 1, -1 },
 	DEBUG_STAT_VISIBILITY_UPDATED = { "haste", "true" },
+	DEBUG_FRIENDLY_NAMES_CVAR_FAILED = { friendlyPlayerNamesCVar },
 }
 local unpackValues = table.unpack or unpack
 for key, arguments in pairs(formatCases) do
@@ -628,6 +663,8 @@ check(HTF.debugLog == HappyTreeFriendsDB.debugLog, "runtime log must share the S
 equal(HTF:GetSetting("autoRepair"), false, "auto repair defaults off")
 equal(HTF:GetSetting("repairFromGuild"), false, "guild repair defaults off")
 equal(HTF:GetSetting("autoSellJunk"), false, "auto sell defaults off")
+equal(HTF:GetSetting("friendlyNamesOnly"), false, "friendly names-only mode defaults off")
+equal(HTF.db.friendlyNamesOnlySnapshot, nil, "friendly names-only mode has no default snapshot")
 equal(HTF:GetSetting("statsLocked"), true, "stats overlay defaults locked")
 equal(HTF:GetSetting("statsFontSize"), 15, "stats overlay default font size")
 equal(HTF.Stats:GetVisibleStatCount(), 14, "all stats default visible")
@@ -672,6 +709,8 @@ equal(HTF.Options.selectedPageKey, "overview", "overview is the initial page")
 equal(HTF.Options:IsPageVisible("overview"), false, "a hidden settings panel is not visible")
 check(registeredCategory and registeredCategory.registered, "options panel is registered as an addon category")
 equal(HTF.Options:GetCategoryID(), 120101, "registered category exposes its numeric ID")
+check(HTF.Options.pages.nameplates ~= nil, "friendly names page is created")
+check(HTF.Options.navigation.nameplates ~= nil, "friendly names page has a navigation button")
 check(HTF.Options.debugScrollFrame.ScrollBar ~= nil, "12.1 scroll template exposes its scrollbar through parentKey")
 equal(HTF.Options.debugScrollFrame:GetName(), nil, "anonymous 12.1 scroll template remains supported")
 local localizedToggle = HTF.Options.toggles[1].toggle
@@ -693,6 +732,8 @@ local allCustomerCopy = table.concat(customerCopy, "\n")
 contains(allCustomerCopy, HTF.L.OVERVIEW_INTRO, "overview uses the selected locale")
 contains(allCustomerCopy, HTF.L.MERCHANT_PAGE_HELP, "merchant page uses the selected locale")
 contains(allCustomerCopy, HTF.L.STATS_PAGE_HELP, "stats page uses the selected locale")
+contains(allCustomerCopy, HTF.L.NAMEPLATES_PAGE_HELP, "friendly names page uses the selected locale")
+contains(allCustomerCopy, HTF.L.FRIENDLY_NAMES_ONLY_NOTICE, "friendly names page explains snapshot restoration")
 contains(allCustomerCopy, HTF.L.DEBUG_PAGE_HELP, "debug page uses the selected locale")
 for _, developerPhrase in ipairs({ "OnUpdate", "轮询", "扫描背包", "MVP", "12.1 原生规则", "continuous polling", "bag scanning" }) do
 	check(not allCustomerCopy:find(developerPhrase, 1, true), "customer-facing UI omits developer phrase: " .. developerPhrase)
@@ -712,6 +753,108 @@ equal(#overviewRow.points, 2, "overview status rows have left and right anchors"
 local statusTitle = overviewRow.points[1][2]
 check(statusTitle == overviewRow.points[2][2], "overview row anchors share a width reference")
 equal(#statusTitle.points, 2, "overview width reference spans the content card")
+
+HTF:HandleSlashCommand("nameplates")
+check(HTF.Options:IsPageVisible("nameplates"), "/htf nameplates opens the friendly names page")
+local friendlyNamesToggleRow
+for _, row in ipairs(HTF.Options.toggles) do
+	if row.settingKey == "friendlyNamesOnly" then
+		friendlyNamesToggleRow = row
+		break
+	end
+end
+check(friendlyNamesToggleRow ~= nil, "friendly names page exposes its mode toggle")
+
+cvarValues[friendlyPlayerNamesCVar] = "0"
+cvarValues[friendlyPlayerNameplatesCVar] = "1"
+cvarValues[friendlyPlayerNamesOnlyCVar] = "0"
+HTF:SetSetting("friendlyNamesOnly", true)
+equal(HTF:GetSetting("friendlyNamesOnly"), true, "friendly names-only mode enables")
+equal(cvarValues[friendlyPlayerNamesCVar], "1", "friendly player names are enabled")
+equal(cvarValues[friendlyPlayerNameplatesCVar], "1", "friendly player nameplates remain enabled with native names-only support")
+equal(cvarValues[friendlyPlayerNamesOnlyCVar], "1", "native friendly names-only mode is enabled")
+local friendlyNamesSnapshot = HTF.db.friendlyNamesOnlySnapshot
+check(type(friendlyNamesSnapshot) == "table", "friendly settings are snapshotted before applying the mode")
+equal(friendlyNamesSnapshot[friendlyPlayerNamesCVar], "0", "snapshot retains the original friendly name setting")
+equal(friendlyNamesSnapshot[friendlyPlayerNameplatesCVar], "1", "snapshot retains the original friendly nameplate setting")
+equal(friendlyNamesSnapshot[friendlyPlayerNamesOnlyCVar], "0", "snapshot retains the original native names-only setting")
+equal(friendlyNamesToggleRow.toggle.state:GetText(), HTF.L.TOGGLE_ON, "friendly names toggle refreshes after enabling")
+
+local cvarCallsBeforeUnrelatedUpdate = #cvarSetCalls
+fireEvent("CVAR_UPDATE", "unrelatedCVar", "1")
+flushTimers()
+equal(#cvarSetCalls, cvarCallsBeforeUnrelatedUpdate, "unrelated CVar updates do not reapply the mode")
+
+cvarValues[friendlyPlayerNameplatesCVar] = "0"
+fireEvent("CVAR_UPDATE", string.upper(friendlyPlayerNameplatesCVar), "0")
+flushTimers()
+equal(cvarValues[friendlyPlayerNameplatesCVar], "1", "managed CVar changes are corrected while the mode is enabled")
+check(HTF.db.friendlyNamesOnlySnapshot == friendlyNamesSnapshot, "reapplying the mode never overwrites the original snapshot")
+
+HTF:SetSetting("friendlyNamesOnly", false)
+equal(cvarValues[friendlyPlayerNamesCVar], "0", "disabling restores the original friendly name setting")
+equal(cvarValues[friendlyPlayerNameplatesCVar], "1", "disabling restores the original friendly nameplate setting")
+equal(cvarValues[friendlyPlayerNamesOnlyCVar], "0", "disabling restores the original native names-only setting")
+equal(HTF.db.friendlyNamesOnlySnapshot, nil, "successful restoration clears the saved snapshot")
+equal(friendlyNamesToggleRow.toggle.state:GetText(), HTF.L.TOGGLE_OFF, "friendly names toggle refreshes after disabling")
+
+cvarValues[friendlyPlayerNamesCVar] = "0"
+cvarValues[friendlyPlayerNameplatesCVar] = "1"
+cvarValues[friendlyPlayerNamesOnlyCVar] = nil
+HTF:SetSetting("friendlyNamesOnly", true)
+equal(cvarValues[friendlyPlayerNamesCVar], "1", "fallback mode keeps friendly player names enabled")
+equal(cvarValues[friendlyPlayerNameplatesCVar], "0", "fallback mode hides friendly nameplates when native names-only support is absent")
+equal(HTF.db.friendlyNamesOnlySnapshot[friendlyPlayerNamesOnlyCVar], nil, "unsupported native names-only CVar is not snapshotted")
+HTF:SetSetting("friendlyNamesOnly", false)
+equal(cvarValues[friendlyPlayerNamesCVar], "0", "fallback restoration restores friendly player names")
+equal(cvarValues[friendlyPlayerNameplatesCVar], "1", "fallback restoration restores friendly player nameplates")
+equal(HTF.db.friendlyNamesOnlySnapshot, nil, "fallback restoration clears its snapshot")
+cvarValues[friendlyPlayerNamesOnlyCVar] = "0"
+
+cvarValues[friendlyPlayerNamesCVar] = "0"
+cvarValues[friendlyPlayerNameplatesCVar] = "0"
+cvarValues[friendlyPlayerNamesOnlyCVar] = "0"
+cvarSetFailures[friendlyPlayerNamesOnlyCVar] = true
+HTF:SetSetting("friendlyNamesOnly", true)
+equal(HTF:GetSetting("friendlyNamesOnly"), true, "mode stays enabled while a captured activation retries")
+equal(cvarValues[friendlyPlayerNamesCVar], "1", "activation applies friendly names before retrying")
+equal(cvarValues[friendlyPlayerNameplatesCVar], "0", "failed native names-only activation never exposes friendly health bars")
+check(type(HTF.db.friendlyNamesOnlySnapshot) == "table", "failed activation retains its original snapshot")
+cvarSetFailures[friendlyPlayerNamesOnlyCVar] = nil
+fireEvent("PLAYER_ENTERING_WORLD")
+flushTimers()
+equal(cvarValues[friendlyPlayerNamesOnlyCVar], "1", "failed native names-only activation retries after entering the world")
+equal(cvarValues[friendlyPlayerNameplatesCVar], "1", "friendly nameplates enable after native names-only activation succeeds")
+HTF:SetSetting("friendlyNamesOnly", false)
+equal(cvarValues[friendlyPlayerNamesCVar], "0", "activation retry test restores friendly player names")
+equal(cvarValues[friendlyPlayerNameplatesCVar], "0", "activation retry test restores friendly player nameplates")
+equal(cvarValues[friendlyPlayerNamesOnlyCVar], "0", "activation retry test restores native names-only mode")
+
+cvarValues[friendlyPlayerNamesCVar] = "0"
+cvarValues[friendlyPlayerNameplatesCVar] = "0"
+cvarValues[friendlyPlayerNamesOnlyCVar] = "0"
+HTF:SetSetting("friendlyNamesOnly", true)
+cvarSetFailures[friendlyPlayerNameplatesCVar] = true
+HTF:SetSetting("friendlyNamesOnly", false)
+equal(HTF:GetSetting("friendlyNamesOnly"), false, "mode remains disabled while restoration is pending")
+check(type(HTF.db.friendlyNamesOnlySnapshot) == "table", "failed restoration retains the original snapshot")
+equal(cvarValues[friendlyPlayerNameplatesCVar], "1", "failed CVar restoration leaves the unresolved value pending")
+cvarSetFailures[friendlyPlayerNameplatesCVar] = nil
+fireEvent("PLAYER_ENTERING_WORLD")
+flushTimers()
+equal(cvarValues[friendlyPlayerNameplatesCVar], "0", "pending restoration retries after entering the world")
+equal(HTF.db.friendlyNamesOnlySnapshot, nil, "successful retry clears the retained snapshot")
+
+cvarValues[friendlyPlayerNamesCVar] = nil
+cvarValues[friendlyPlayerNameplatesCVar] = "0"
+HTF:SetSetting("friendlyNamesOnly", true)
+equal(HTF:GetSetting("friendlyNamesOnly"), false, "mode stays off when required game settings are unavailable")
+equal(HTF.db.friendlyNamesOnlySnapshot, nil, "failed activation does not create an incomplete snapshot")
+cvarValues[friendlyPlayerNamesCVar] = "0"
+
+HTF.db.friendlyNamesOnlySnapshot = "invalid"
+HTF.FriendlyNames:Synchronize()
+equal(HTF.db.friendlyNamesOnlySnapshot, nil, "invalid persisted friendly settings snapshots are discarded safely")
 
 HTF.Options:Open("stats")
 check(HTF.Options:IsPageVisible("stats"), "stats page becomes visible")
@@ -1055,6 +1198,7 @@ local report = HTF:BuildDiagnosticReport()
 contains(report, "Happy Tree Friends - Diagnostic Report", "diagnostic report header")
 contains(report, "WoW build: 69299", "diagnostic report build")
 contains(report, "repairFromGuild: false", "diagnostic report includes guild repair setting")
+contains(report, "friendlyNamesOnly: false", "diagnostic report includes friendly names-only setting")
 contains(report, "statsFontSize: 15", "diagnostic report includes HUD font size")
 contains(report, "visibleStats: 14/14", "diagnostic report includes visible HUD stat count")
 contains(report, "statsPosition:", "diagnostic report includes HUD position")

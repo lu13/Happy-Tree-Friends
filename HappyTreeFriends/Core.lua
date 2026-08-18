@@ -1,7 +1,7 @@
 local ADDON_NAME, HTF = ...
 
 HTF.ADDON_NAME = ADDON_NAME
-HTF.VERSION = "0.3.0"
+HTF.VERSION = "0.4.0"
 HTF.MAX_DEBUG_LOG_ENTRIES = 80
 HTF.debugLog = {}
 
@@ -9,6 +9,7 @@ HTF.defaults = {
 	autoRepair = false,
 	repairFromGuild = false,
 	autoSellJunk = false,
+	friendlyNamesOnly = false,
 	showStats = true,
 	statsLocked = true,
 	statsFontSize = 15,
@@ -107,6 +108,9 @@ function HTF:SetSetting(key, value)
 	end
 
 	self.db[key] = value
+	if self.FriendlyNames and self.FriendlyNames.OnSettingChanged and key == "friendlyNamesOnly" then
+		self.FriendlyNames:OnSettingChanged()
+	end
 	if self.Stats and self.Stats.OnSettingChanged then
 		self.Stats:OnSettingChanged(key)
 	end
@@ -229,7 +233,7 @@ function HTF:BuildDiagnosticReport()
 		"Settings:",
 	}
 
-	for _, key in ipairs({ "autoRepair", "repairFromGuild", "autoSellJunk", "showStats", "statsLocked", "showNotifications", "debug" }) do
+	for _, key in ipairs({ "autoRepair", "repairFromGuild", "autoSellJunk", "friendlyNamesOnly", "showStats", "statsLocked", "showNotifications", "debug" }) do
 		table.insert(lines, string.format("- %s: %s", key, tostring(self:GetSetting(key) == true)))
 	end
 	table.insert(lines, string.format("- statsFontSize: %s", self:SafeScalarText(self:GetSetting("statsFontSize"))))
@@ -316,6 +320,11 @@ function HTF:HandleSlashCommand(input)
 		return
 	end
 
+	if command == "nameplates" or command == self.L.COMMAND_NAMEPLATES_ALIAS then
+		self:OpenOptions("nameplates")
+		return
+	end
+
 	if command == "help" or command == self.L.COMMAND_HELP_ALIAS then
 		self:Notify(self.L.SLASH_HELP)
 		return
@@ -357,6 +366,9 @@ function HTF:Initialize()
 
 	if self.Merchant then
 		self.Merchant:Initialize()
+	end
+	if self.FriendlyNames then
+		self.FriendlyNames:Initialize()
 	end
 	if self.Stats then
 		self.Stats:Initialize()

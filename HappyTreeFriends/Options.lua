@@ -280,6 +280,7 @@ function Options:CreateOverviewPage(page)
 	local statuses = {
 		{ key = "autoRepair", label = HTF.L.AUTO_REPAIR },
 		{ key = "autoSellJunk", label = HTF.L.AUTO_SELL_JUNK },
+		{ key = "friendlyNamesOnly", label = HTF.L.FRIENDLY_NAMES_ONLY },
 		{ key = "showStats", label = HTF.L.CHARACTER_STATS },
 		{ key = "debug", label = HTF.L.DEBUG_MODE },
 	}
@@ -440,6 +441,23 @@ function Options:CreateStatsPage(page)
 		local rowIndex = column == "left" and index or index - 7
 		self:CreateStatSettingRow(page, column, -242 - (rowIndex - 1) * 34, definition.key, HTF.Stats:GetStatLabel(definition.key))
 	end
+end
+
+function Options:CreateNameplatesPage(page)
+	self:AddPageHeader(page, HTF.L.NAMEPLATES, HTF.L.NAMEPLATES_PAGE_HELP)
+	self:CreateToggleRow(page, -96, "friendlyNamesOnly", HTF.L.FRIENDLY_NAMES_ONLY, HTF.L.FRIENDLY_NAMES_ONLY_DESC)
+
+	local note = CreateFrame("Frame", nil, page, "BackdropTemplate")
+	note:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -188)
+	note:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, -188)
+	note:SetHeight(88)
+	applyBackdrop(note, COLORS.sidebar, COLORS.border)
+
+	local noteText = createText(note, "GameFontHighlightSmall", HTF.L.FRIENDLY_NAMES_ONLY_NOTICE, 11, COLORS.muted)
+	noteText:SetPoint("TOPLEFT", 14, -13)
+	noteText:SetPoint("TOPRIGHT", -14, -13)
+	noteText:SetJustifyH("LEFT")
+	noteText:SetJustifyV("TOP")
 end
 
 function Options:OpenStatColorPicker(key)
@@ -633,7 +651,8 @@ function Options:CreatePanel()
 	self:CreateNavigationButton(sidebar, "overview", HTF.L.OVERVIEW, -116)
 	self:CreateNavigationButton(sidebar, "merchant", HTF.L.MERCHANT, -160)
 	self:CreateNavigationButton(sidebar, "stats", HTF.L.CHARACTER_STATS, -204)
-	self:CreateNavigationButton(sidebar, "debug", HTF.L.DEBUG, -248)
+	self:CreateNavigationButton(sidebar, "nameplates", HTF.L.NAMEPLATES, -248)
+	self:CreateNavigationButton(sidebar, "debug", HTF.L.DEBUG, -292)
 
 	local sidebarHelp = createText(sidebar, "GameFontHighlightSmall", "/htf", 12, COLORS.accent)
 	sidebarHelp:SetPoint("BOTTOMLEFT", 18, 23)
@@ -644,7 +663,7 @@ function Options:CreatePanel()
 	content:SetPoint("TOPLEFT", sidebar, "TOPRIGHT", 1, 0)
 	content:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 0)
 
-	for _, key in ipairs({ "overview", "merchant", "stats", "debug" }) do
+	for _, key in ipairs({ "overview", "merchant", "stats", "nameplates", "debug" }) do
 		local page = CreateFrame("Frame", nil, content)
 		page:SetAllPoints(content)
 		page:Hide()
@@ -654,6 +673,7 @@ function Options:CreatePanel()
 	self:CreateOverviewPage(self.pages.overview)
 	self:CreateMerchantPage(self.pages.merchant)
 	self:CreateStatsPage(self.pages.stats)
+	self:CreateNameplatesPage(self.pages.nameplates)
 	self:CreateDebugPage(self.pages.debug)
 
 	panel:SetScript("OnShow", function()
