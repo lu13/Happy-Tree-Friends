@@ -31,6 +31,7 @@ end
 
 date = os.date
 SlashCmdList = {}
+UISpecialFrames = {}
 ChatFontNormal = "ChatFontNormal"
 GameFontHighlightSmall = "GameFontHighlightSmall"
 
@@ -92,6 +93,10 @@ function objectMethods:SetHeight(height)
 	self.height = height
 end
 
+function objectMethods:GetWidth()
+	return self.width or 174
+end
+
 function objectMethods:GetHeight()
 	return self.height or 174
 end
@@ -131,7 +136,7 @@ function objectMethods:CreateTexture()
 end
 
 function objectMethods:GetName()
-	return self.name
+	return self.frameName
 end
 
 function objectMethods:SetText(text)
@@ -206,8 +211,24 @@ function objectMethods:SetMovable(movable)
 	self.movable = movable == true
 end
 
+function objectMethods:SetResizable(resizable)
+	self.resizable = resizable == true
+end
+
+function objectMethods:SetResizeBounds(minWidth, minHeight, maxWidth, maxHeight)
+	self.resizeBounds = { minWidth, minHeight, maxWidth, maxHeight }
+end
+
 function objectMethods:SetClampedToScreen(clamped)
 	self.clampedToScreen = clamped == true
+end
+
+function objectMethods:SetScale(scale)
+	self.scale = scale
+end
+
+function objectMethods:GetScale()
+	return self.scale or 1
 end
 
 function objectMethods:RegisterForDrag(...)
@@ -218,8 +239,13 @@ function objectMethods:StartMoving()
 	self.moving = true
 end
 
+function objectMethods:StartSizing(anchor)
+	self.sizing = anchor
+end
+
 function objectMethods:StopMovingOrSizing()
 	self.moving = false
+	self.sizing = nil
 	self.stoppedMoving = true
 end
 
@@ -229,6 +255,7 @@ local noOpMethods = {
 	"SetJustifyV",
 	"SetTexture",
 	"SetFrameStrata",
+	"SetToplevel",
 	"SetMultiLine",
 	"SetAutoFocus",
 	"SetFontObject",
@@ -247,6 +274,7 @@ local function newObject(kind, name, parent, template)
 	local object = setmetatable({
 		kind = kind,
 		name = name,
+		frameName = name,
 		parent = parent,
 		template = template,
 		shown = true,
@@ -260,6 +288,10 @@ local function newObject(kind, name, parent, template)
 end
 
 UIParent = newObject("Frame", "UIParent", nil)
+SystemFont_NamePlate = newObject("Font", "SystemFont_NamePlate", UIParent)
+SystemFont_NamePlate:SetFont("MockNameplateFont", 12, "")
+SystemFont_NamePlate_Outlined = newObject("Font", "SystemFont_NamePlate_Outlined", UIParent)
+SystemFont_NamePlate_Outlined:SetFont("MockNameplateOutlineFont", 13, "OUTLINE")
 
 function CreateFrame(kind, name, parent, template)
 	local object = newObject(kind, name, parent, template)
@@ -326,10 +358,12 @@ end
 local friendlyPlayerNamesCVar = "UnitNameFriendlyPlayerName"
 local friendlyPlayerNameplatesCVar = "nameplateShowFriendlyPlayers"
 local friendlyPlayerNamesOnlyCVar = "nameplateShowOnlyNameForFriendlyPlayerUnits"
+local friendlyPlayerClassColorsCVar = "nameplateUseClassColorForFriendlyPlayerUnitNames"
 local cvarValues = {
 	[friendlyPlayerNamesCVar] = "0",
 	[friendlyPlayerNameplatesCVar] = "0",
 	[friendlyPlayerNamesOnlyCVar] = "0",
+	[friendlyPlayerClassColorsCVar] = "0",
 }
 local cvarSetFailures = {}
 local cvarSetCalls = {}
@@ -354,6 +388,22 @@ end
 
 function SetCVar(cvarName, value)
 	return C_CVar.SetCVar(cvarName, value)
+end
+
+local mockNamePlates = {}
+local nameplateUnitInfo = {}
+C_NamePlate = {
+	GetNamePlateForUnit = function(unit)
+		return mockNamePlates[unit]
+	end,
+}
+
+function UnitIsFriend(_, unit)
+	return nameplateUnitInfo[unit] and nameplateUnitInfo[unit].friendly or false
+end
+
+function UnitIsPlayer(unit)
+	return nameplateUnitInfo[unit] and nameplateUnitInfo[unit].player or false
 end
 
 local combatLocked = false
@@ -716,7 +766,7 @@ for _, path in ipairs({
 end
 
 fireEvent("ADDON_LOADED", "HappyTreeFriends")
-equal(HTF.VERSION, "0.5.0", "addon version")
+equal(HTF.VERSION, "0.6.0", "addon version")
 equal(HTF.LOCALE, testLocale, "addon selects the active supported locale")
 equal(HTF.CLIENT_LOCALE, testLocale, "addon records the client locale")
 equal(HTF.L.SETTINGS, testLocale == "zhCN" and "设置" or "Settings", "selected locale exposes translated settings text")
@@ -732,7 +782,7 @@ for _, definition in ipairs(HTF.Stats.STAT_DEFINITIONS) do
 	check(HTF.LOCALES.zhCN[definition.fallbackKey] ~= nil, "zhCN stat fallback exists: " .. definition.key)
 end
 local formatCases = {
-	VERSION_LABEL = { "0.5.0" },
+	VERSION_LABEL = { "0.6.0" },
 	REPAIRED_PERSONAL = { "1g" },
 	REPAIRED_GUILD = { "1g" },
 	REPAIRED_MIXED = { "1g" },
@@ -763,9 +813,13 @@ equal(HTF:GetSetting("repairFromGuild"), false, "guild repair defaults off")
 equal(HTF:GetSetting("autoSellJunk"), false, "auto sell defaults off")
 check(type(HTF:GetSetting("protectedJunkItems")) == "table", "protected junk item IDs default to an empty table")
 equal(HTF:GetSetting("friendlyNamesOnly"), false, "friendly names-only mode defaults off")
+equal(HTF:GetSetting("friendlyNameClassColors"), false, "friendly name class colors default off")
+equal(HTF:GetSetting("friendlyNameCustomFontSize"), false, "friendly custom name size defaults off")
+equal(HTF:GetSetting("friendlyNameFontSize"), 14, "friendly name font size has a safe default")
 equal(HTF.db.friendlyNamesOnlySnapshot, nil, "friendly names-only mode has no default snapshot")
 equal(HTF:GetSetting("statsLocked"), true, "stats overlay defaults locked")
 equal(HTF:GetSetting("statsFontSize"), 15, "stats overlay default font size")
+equal(HTF:GetSetting("statsScale"), 1, "stats overlay default scale")
 equal(HTF.Stats:GetVisibleStatCount(), 14, "all stats default visible")
 equal(HTF.Stats:GetVisibleAdventureStatusCount(), 0, "adventure status defaults hidden")
 
@@ -777,8 +831,13 @@ equal(HTF.Stats.overlay.backdropColor[4], 0, "locked overlay background is trans
 equal(HTF.Stats.overlay.backdropBorderColor[4], 0, "locked overlay border is transparent")
 check(not HTF.Stats.overlay.title:IsShown(), "locked overlay hides its drag hint")
 check(HTF.Stats.overlay.movable, "stats overlay is movable")
+check(HTF.Stats.overlay.resizable, "stats overlay supports native resizing")
 check(HTF.Stats.overlay.clampedToScreen, "stats overlay stays clamped to screen")
 equal(HTF.Stats.overlay.dragButtons[1], "LeftButton", "stats overlay uses left-button drag")
+equal(HTF.Stats.overlay:GetScale(), 1, "stats overlay applies its default scale")
+check(HTF.Stats.overlay.resizeHandle ~= nil, "stats overlay has a resize handle")
+equal(HTF.Stats.overlay.resizeHandle.dragButtons[1], "LeftButton", "resize handle uses left-button drag")
+check(not HTF.Stats.overlay.resizeHandle:IsShown(), "locked overlay hides its resize handle")
 equal(HTF.Stats.overlay.rows.strength.fontSize, 15, "overlay applies the configured font size")
 equal(HTF.Stats.overlay.rows.strength.fontFlags, "THICKOUTLINE", "overlay stat text uses a thick outline")
 equal(HTF.Stats.overlay.rows.strength.shadowColor[4], 1, "overlay stat text uses an opaque black shadow")
@@ -807,10 +866,13 @@ check(sawFirstSpellSchool and sawLastSpellSchool, "PaperDoll crit calculation re
 
 fireEvent("PLAYER_LOGIN")
 check(HTF.Options.panel ~= nil, "options panel is created at login")
+equal(HTF.Options.panel:GetName(), "HappyTreeFriendsSettingsFrame", "options uses a dedicated top-level frame")
+check(HTF.Options.closeButton ~= nil, "dedicated settings frame includes a close button")
 equal(HTF.Options.selectedPageKey, "overview", "overview is the initial page")
 equal(HTF.Options:IsPageVisible("overview"), false, "a hidden settings panel is not visible")
 check(registeredCategory and registeredCategory.registered, "options panel is registered as an addon category")
 equal(HTF.Options:GetCategoryID(), 120101, "registered category exposes its numeric ID")
+check(UISpecialFrames[1] == "HappyTreeFriendsSettingsFrame", "Escape closes the dedicated settings frame")
 check(HTF.Options.pages.nameplates ~= nil, "friendly names page is created")
 check(HTF.Options.navigation.nameplates ~= nil, "friendly names page has a navigation button")
 check(HTF.Options.debugScrollFrame.ScrollBar ~= nil, "12.1 scroll template exposes its scrollbar through parentKey")
@@ -859,27 +921,40 @@ equal(#statusTitle.points, 2, "overview width reference spans the content card")
 HTF:HandleSlashCommand("nameplates")
 check(HTF.Options:IsPageVisible("nameplates"), "/htf nameplates opens the friendly names page")
 local friendlyNamesToggleRow
+local friendlyNameClassColorsToggleRow
+local friendlyNameFontToggleRow
 for _, row in ipairs(HTF.Options.toggles) do
 	if row.settingKey == "friendlyNamesOnly" then
 		friendlyNamesToggleRow = row
-		break
+	elseif row.settingKey == "friendlyNameClassColors" then
+		friendlyNameClassColorsToggleRow = row
+	elseif row.settingKey == "friendlyNameCustomFontSize" then
+		friendlyNameFontToggleRow = row
 	end
 end
 check(friendlyNamesToggleRow ~= nil, "friendly names page exposes its mode toggle")
+check(friendlyNameClassColorsToggleRow ~= nil, "friendly names page exposes its class-color toggle")
+check(friendlyNameFontToggleRow ~= nil, "friendly names page exposes its custom-size toggle")
+equal(HTF.Options.friendlyNameFontValue:GetText(), "14", "friendly names page displays the default name font size")
 
 cvarValues[friendlyPlayerNamesCVar] = "0"
 cvarValues[friendlyPlayerNameplatesCVar] = "1"
 cvarValues[friendlyPlayerNamesOnlyCVar] = "0"
+cvarValues[friendlyPlayerClassColorsCVar] = "0"
+SystemFont_NamePlate:SetFont("MockNameplateFont", 12, "")
+SystemFont_NamePlate_Outlined:SetFont("MockNameplateOutlineFont", 13, "OUTLINE")
 HTF:SetSetting("friendlyNamesOnly", true)
 equal(HTF:GetSetting("friendlyNamesOnly"), true, "friendly names-only mode enables")
 equal(cvarValues[friendlyPlayerNamesCVar], "1", "friendly player names are enabled")
 equal(cvarValues[friendlyPlayerNameplatesCVar], "1", "friendly player nameplates remain enabled with native names-only support")
 equal(cvarValues[friendlyPlayerNamesOnlyCVar], "1", "native friendly names-only mode is enabled")
+equal(cvarValues[friendlyPlayerClassColorsCVar], "0", "class colors remain opt-in")
 local friendlyNamesSnapshot = HTF.db.friendlyNamesOnlySnapshot
 check(type(friendlyNamesSnapshot) == "table", "friendly settings are snapshotted before applying the mode")
 equal(friendlyNamesSnapshot[friendlyPlayerNamesCVar], "0", "snapshot retains the original friendly name setting")
 equal(friendlyNamesSnapshot[friendlyPlayerNameplatesCVar], "1", "snapshot retains the original friendly nameplate setting")
 equal(friendlyNamesSnapshot[friendlyPlayerNamesOnlyCVar], "0", "snapshot retains the original native names-only setting")
+equal(friendlyNamesSnapshot[friendlyPlayerClassColorsCVar], "0", "snapshot retains the original class-color setting")
 equal(friendlyNamesToggleRow.toggle.state:GetText(), HTF.L.TOGGLE_ON, "friendly names toggle refreshes after enabling")
 
 local cvarCallsBeforeUnrelatedUpdate = #cvarSetCalls
@@ -893,12 +968,76 @@ flushTimers()
 equal(cvarValues[friendlyPlayerNameplatesCVar], "1", "managed CVar changes are corrected while the mode is enabled")
 check(HTF.db.friendlyNamesOnlySnapshot == friendlyNamesSnapshot, "reapplying the mode never overwrites the original snapshot")
 
+HTF:SetSetting("friendlyNameClassColors", true)
+equal(cvarValues[friendlyPlayerClassColorsCVar], "1", "class-color setting uses the native friendly-name CVar")
+equal(friendlyNameClassColorsToggleRow.toggle.dot.points[1][1], "RIGHT", "class-color toggle refreshes after enabling")
+
+HTF.FriendlyNames:SetFontSize(19)
+equal(HTF:GetSetting("friendlyNameFontSize"), 19, "friendly name font size persists in settings")
+equal(HTF.Options.friendlyNameFontValue:GetText(), "19", "friendly name font size control refreshes immediately")
+local _, originalNameplateFontSize = SystemFont_NamePlate:GetFont()
+local _, originalOutlinedNameplateFontSize = SystemFont_NamePlate_Outlined:GetFont()
+equal(originalNameplateFontSize, 12, "custom name size stays inactive until enabled")
+equal(originalOutlinedNameplateFontSize, 13, "outlined name font stays unchanged until enabled")
+
+HTF:SetSetting("friendlyNameCustomFontSize", true)
+flushTimers()
+local _, selectedNameplateFontSize = SystemFont_NamePlate:GetFont()
+local _, selectedOutlinedNameplateFontSize = SystemFont_NamePlate_Outlined:GetFont()
+equal(selectedNameplateFontSize, 19, "custom name size applies to the standard nameplate font")
+equal(selectedOutlinedNameplateFontSize, 19, "custom name size applies to the outlined nameplate font")
+equal(friendlyNameFontToggleRow.toggle.dot.points[1][1], "RIGHT", "custom name-size toggle refreshes after enabling")
+
+local accessibleFriendlyNameplate = CreateFrame("Frame", nil, UIParent)
+accessibleFriendlyNameplate.UnitFrame = CreateFrame("Frame", nil, accessibleFriendlyNameplate)
+accessibleFriendlyNameplate.UnitFrame.name = CreateFrame("FontString", nil, accessibleFriendlyNameplate.UnitFrame)
+accessibleFriendlyNameplate.UnitFrame.name:SetFont("PerPlateFont", 12, "OUTLINE")
+mockNamePlates.nameplate1 = accessibleFriendlyNameplate
+nameplateUnitInfo.nameplate1 = { friendly = true, player = true }
+fireEvent("NAME_PLATE_UNIT_ADDED", "nameplate1")
+local _, accessibleFriendlyNameSize = accessibleFriendlyNameplate.UnitFrame.name:GetFont()
+equal(accessibleFriendlyNameSize, 19, "new accessible friendly nameplates receive the selected font size")
+
+nameplateUnitInfo.nameplate2 = { friendly = true, player = true }
+fireEvent("NAME_PLATE_UNIT_ADDED", "nameplate2")
+local _, transientNameplateFontSize = SystemFont_NamePlate:GetFont()
+equal(transientNameplateFontSize, 18, "inaccessible friendly nameplates trigger one coalesced font refresh")
+flushTimers()
+local _, refreshedNameplateFontSize = SystemFont_NamePlate:GetFont()
+equal(refreshedNameplateFontSize, 19, "coalesced font refresh restores the chosen size")
+
+HTF.FriendlyNames:SetFontSize(100)
+flushTimers()
+equal(HTF:GetSetting("friendlyNameFontSize"), HTF.FriendlyNames.MAX_FONT_SIZE, "friendly name font size is clamped to a safe maximum")
+local _, maximumNameplateFontSize = SystemFont_NamePlate:GetFont()
+equal(maximumNameplateFontSize, HTF.FriendlyNames.MAX_FONT_SIZE, "maximum font size applies immediately")
+HTF.FriendlyNames:SetFontSize(1)
+flushTimers()
+equal(HTF:GetSetting("friendlyNameFontSize"), HTF.FriendlyNames.MIN_FONT_SIZE, "friendly name font size is clamped to a safe minimum")
+
+HTF:SetSetting("friendlyNameCustomFontSize", false)
+local _, restoredNameplateFontSize = SystemFont_NamePlate:GetFont()
+local _, restoredOutlinedNameplateFontSize = SystemFont_NamePlate_Outlined:GetFont()
+equal(restoredNameplateFontSize, 12, "turning custom name size off restores the standard font")
+equal(restoredOutlinedNameplateFontSize, 13, "turning custom name size off restores the outlined font")
+check(HTF.FriendlyNames.fontSnapshot == nil, "turning custom name size off clears the font snapshot")
+
+HTF:SetSetting("friendlyNameCustomFontSize", true)
+flushTimers()
 HTF:SetSetting("friendlyNamesOnly", false)
 equal(cvarValues[friendlyPlayerNamesCVar], "0", "disabling restores the original friendly name setting")
 equal(cvarValues[friendlyPlayerNameplatesCVar], "1", "disabling restores the original friendly nameplate setting")
 equal(cvarValues[friendlyPlayerNamesOnlyCVar], "0", "disabling restores the original native names-only setting")
+equal(cvarValues[friendlyPlayerClassColorsCVar], "0", "disabling restores the original class-color setting")
+local _, disabledNameplateFontSize = SystemFont_NamePlate:GetFont()
+local _, disabledOutlinedNameplateFontSize = SystemFont_NamePlate_Outlined:GetFont()
+equal(disabledNameplateFontSize, 12, "disabling friendly names restores the standard nameplate font")
+equal(disabledOutlinedNameplateFontSize, 13, "disabling friendly names restores the outlined nameplate font")
 equal(HTF.db.friendlyNamesOnlySnapshot, nil, "successful restoration clears the saved snapshot")
 equal(friendlyNamesToggleRow.toggle.state:GetText(), HTF.L.TOGGLE_OFF, "friendly names toggle refreshes after disabling")
+HTF:SetSetting("friendlyNameClassColors", false)
+HTF:SetSetting("friendlyNameCustomFontSize", false)
+HTF.FriendlyNames:SetFontSize(14)
 
 cvarValues[friendlyPlayerNamesCVar] = "0"
 cvarValues[friendlyPlayerNameplatesCVar] = "1"
@@ -958,9 +1097,15 @@ HTF.db.friendlyNamesOnlySnapshot = "invalid"
 HTF.FriendlyNames:Synchronize()
 equal(HTF.db.friendlyNamesOnlySnapshot, nil, "invalid persisted friendly settings snapshots are discarded safely")
 
+local settingsOpenCallsBeforeSlash = settingsOpenCalls
 HTF.Options:Open("stats")
 check(HTF.Options:IsPageVisible("stats"), "stats page becomes visible")
-equal(lastOpenedCategoryID, 120101, "options opens the registered numeric category ID")
+equal(settingsOpenCalls, settingsOpenCallsBeforeSlash, "slash command opens the dedicated settings frame directly")
+equal(HTF.Options.panel.points[1][1], "CENTER", "dedicated settings frame is centered when opened")
+HTF.Options.closeButton.scripts.OnClick(HTF.Options.closeButton)
+check(not HTF.Options.panel:IsShown(), "settings close button hides the dedicated frame")
+HTF.Options:Open("stats")
+check(HTF.Options.panel:IsShown(), "opening settings restores the dedicated frame")
 equal(HTF.Stats.view, nil, "settings page no longer owns a live stat-value view")
 local configuredStatRows = 0
 for _ in pairs(HTF.Options.statSettingRows) do
@@ -978,6 +1123,13 @@ equal(leftToggle.points[1][3], "TOPLEFT", "left stats toggle starts at the conte
 equal(leftToggle.points[2][3], "TOP", "left stats toggle ends at the content midpoint")
 equal(rightToggle.points[1][3], "TOP", "right stats toggle starts at the content midpoint")
 equal(rightToggle.points[2][3], "TOPRIGHT", "right stats toggle ends at the content edge")
+
+local friendlyClassColorToggle = HTF.Options.friendlyNameClassColorToggleRow
+local friendlyFontToggle = HTF.Options.friendlyNameFontToggleRow
+equal(friendlyClassColorToggle.width, nil, "friendly class-color toggle does not use a fixed width")
+equal(friendlyFontToggle.width, nil, "friendly font-size toggle does not use a fixed width")
+equal(#friendlyClassColorToggle.points, 2, "friendly class-color toggle uses responsive anchors")
+equal(#friendlyFontToggle.points, 2, "friendly font-size toggle uses responsive anchors")
 
 local leftStatRow = HTF.Options.statSettingRows.strength
 local rightStatRow = HTF.Options.statSettingRows.mastery
@@ -1181,6 +1333,23 @@ HTF:SetSetting("statsLocked", false)
 equal(HTF.Stats.overlay.mouseEnabled, true, "unlocked HUD accepts mouse input")
 equal(HTF.Stats.overlay.backdropColor[4], 0.82, "unlocked HUD shows its drag background")
 check(HTF.Stats.overlay.title:IsShown(), "unlocked HUD shows its drag hint")
+check(HTF.Stats.overlay.resizeHandle:IsShown(), "unlocked HUD shows its resize handle")
+local resizeBaseWidth = HTF.Stats.overlayBaseWidth
+local resizeBaseHeight = HTF.Stats.overlayBaseHeight
+HTF.Stats.overlay.resizeHandle.scripts.OnDragStart(HTF.Stats.overlay.resizeHandle)
+equal(HTF.Stats.overlay.sizing, "BOTTOMRIGHT", "resize handle starts native bottom-right sizing")
+check(HTF.Stats.overlay.resizeBounds ~= nil, "resize handle applies bounds for the allowed scale range")
+HTF.Stats.overlay:SetSize(resizeBaseWidth * 1.5, resizeBaseHeight * 1.5)
+HTF.Stats.overlay.resizeHandle.scripts.OnDragStop(HTF.Stats.overlay.resizeHandle)
+equal(HTF:GetSetting("statsScale"), 1.5, "resizing persists proportional HUD scale")
+equal(HTF.Stats.overlay:GetScale(), 1.5, "resizing applies HUD scale immediately")
+equal(HTF.Stats.overlay.width, resizeBaseWidth, "resizing restores the HUD's calculated base width")
+equal(HTF.Stats.overlay.height, resizeBaseHeight, "resizing restores the HUD's calculated base height")
+HTF.Stats:SetScale(99)
+equal(HTF.Stats:GetScale(), HTF.Stats.MAX_SCALE, "HUD scale clamps to its maximum")
+HTF.Stats:SetScale(-1)
+equal(HTF.Stats:GetScale(), HTF.Stats.MIN_SCALE, "HUD scale clamps to its minimum")
+HTF.Stats:SetScale(1)
 HTF.Stats.overlay.scripts.OnDragStart(HTF.Stats.overlay)
 check(HTF.Stats.overlay.moving, "unlocked HUD starts moving")
 HTF.Stats.overlay:ClearAllPoints()
@@ -1205,6 +1374,7 @@ equal(HTF.db.statsPosition.point, HTF.defaults.statsPosition.point, "reset posit
 HTF:SetSetting("statsLocked", true)
 equal(HTF.Stats.overlay.mouseEnabled, false, "re-locking HUD releases mouse input")
 equal(HTF.Stats.overlay.backdropColor[4], 0, "re-locking HUD restores transparency")
+check(not HTF.Stats.overlay.resizeHandle:IsShown(), "re-locking HUD hides its resize handle")
 
 combatLocked = true
 fireEvent("PLAYER_REGEN_DISABLED")
@@ -1216,12 +1386,14 @@ equal(HTF.Stats.overlay.status:GetText(), "", "leaving combat refreshes and clea
 
 HTF.db.statsLocked = "corrupt"
 HTF.db.statsFontSize = "large"
+HTF.db.statsScale = 9
 HTF.db.statsVisibility = "corrupt"
 HTF.db.statsColors = { strength = { 2, -1, "blue" } }
 HTF.db.statsPosition = { point = "BOGUS", relativePoint = "NOPE", x = 9000, y = "down" }
 HTF.Stats:NormalizeSettings()
 equal(HTF.db.statsLocked, HTF.defaults.statsLocked, "invalid persisted lock state resets to default")
 equal(HTF.db.statsFontSize, HTF.defaults.statsFontSize, "invalid persisted font size resets to default")
+equal(HTF.db.statsScale, HTF.Stats.MAX_SCALE, "persisted HUD scale is clamped")
 equal(HTF.Stats:GetVisibleStatCount(), 14, "invalid persisted visibility table is rebuilt")
 local normalizedR, normalizedG, normalizedB = HTF.Stats:GetStatColor("strength")
 equal(normalizedR, 1, "persisted color red component is clamped")
@@ -1233,6 +1405,9 @@ equal(HTF.db.statsPosition.x, 4096, "persisted x offset is clamped")
 equal(HTF.db.statsPosition.y, HTF.defaults.statsPosition.y, "invalid persisted y offset resets to default")
 HTF.Stats:ResetColors()
 HTF.Stats:ResetPosition()
+HTF.db.statsScale = "large"
+HTF.Stats:NormalizeSettings()
+equal(HTF.db.statsScale, HTF.defaults.statsScale, "invalid persisted HUD scale resets to default")
 HTF.Stats:ApplyOverlaySettings()
 
 HTF:SetSetting("autoRepair", true)
@@ -1445,7 +1620,11 @@ contains(report, "Happy Tree Friends - Diagnostic Report", "diagnostic report he
 contains(report, "WoW build: 69299", "diagnostic report build")
 contains(report, "repairFromGuild: false", "diagnostic report includes guild repair setting")
 contains(report, "friendlyNamesOnly: false", "diagnostic report includes friendly names-only setting")
+contains(report, "friendlyNameClassColors: false", "diagnostic report includes friendly name class-color setting")
+contains(report, "friendlyNameCustomFontSize: false", "diagnostic report includes friendly name custom-size setting")
+contains(report, "friendlyNameFontSize: 14", "diagnostic report includes friendly name font size")
 contains(report, "statsFontSize: 15", "diagnostic report includes HUD font size")
+contains(report, "statsScale: 1", "diagnostic report includes HUD scale")
 contains(report, "visibleStats: 14/14", "diagnostic report includes visible HUD stat count")
 contains(report, "visibleAdventureStatus: 0/4", "diagnostic report includes visible adventure-status count")
 contains(report, "Protected junk item IDs: 0", "diagnostic report excludes protected item details while reporting their count")

@@ -6,12 +6,23 @@ HTF.FriendlyNames = FriendlyNames
 local FRIENDLY_PLAYER_NAMES_CVAR = "UnitNameFriendlyPlayerName"
 local FRIENDLY_PLAYER_NAMEPLATES_CVAR = "nameplateShowFriendlyPlayers"
 local FRIENDLY_PLAYER_NAMES_ONLY_CVAR = "nameplateShowOnlyNameForFriendlyPlayerUnits"
+local FRIENDLY_PLAYER_CLASS_COLORS_CVAR = "nameplateUseClassColorForFriendlyPlayerUnitNames"
+
+local FONT_OBJECT_NAMES = {
+	"SystemFont_NamePlate",
+	"SystemFont_NamePlate_Outlined",
+}
 
 local MANAGED_CVARS = {
 	FRIENDLY_PLAYER_NAMES_CVAR,
 	FRIENDLY_PLAYER_NAMES_ONLY_CVAR,
+	FRIENDLY_PLAYER_CLASS_COLORS_CVAR,
 	FRIENDLY_PLAYER_NAMEPLATES_CVAR,
 }
+
+FriendlyNames.MIN_FONT_SIZE = 8
+FriendlyNames.MAX_FONT_SIZE = 28
+FriendlyNames.DEFAULT_FONT_SIZE = 14
 
 local relevantCVarNames = {}
 for _, cvarName in ipairs(MANAGED_CVARS) do
@@ -35,6 +46,21 @@ local function normalizeCVarValue(value)
 	end
 
 	return nil
+end
+
+local function normalizeFontSize(value)
+	if HTF:IsSecretValue(value) then
+		return FriendlyNames.DEFAULT_FONT_SIZE
+	end
+
+	if type(value) ~= "number" then
+		value = tonumber(value)
+	end
+	if type(value) ~= "number" then
+		return FriendlyNames.DEFAULT_FONT_SIZE
+	end
+
+	return math.max(FriendlyNames.MIN_FONT_SIZE, math.min(FriendlyNames.MAX_FONT_SIZE, math.floor(value)))
 end
 
 local function getCVarGetter()
@@ -93,6 +119,189 @@ function FriendlyNames:SetCVarValue(cvarName, value)
 	end
 
 	return true, true
+end
+
+function FriendlyNames:GetFontSize()
+	return normalizeFontSize(HTF:GetSetting("friendlyNameFontSize"))
+end
+
+function FriendlyNames:SetFontSize(size)
+	if not HTF.db then
+		return
+	end
+	HTF:SetSetting("friendlyNameFontSize", normalizeFontSize(size))
+end
+
+function FriendlyNames:IsCustomFontSizeActive()
+	return HTF:GetSetting("friendlyNamesOnly") == true and HTF:GetSetting("friendlyNameCustomFontSize") == true
+end
+
+function FriendlyNames:GetFontObjects()
+	local objects = {}
+	for _, name in ipairs(FONT_OBJECT_NAMES) do
+		local fontObject = _G[name]
+		if fontObject and type(fontObject.GetFont) == "function" and type(fontObject.SetFont) == "function" then
+			table.insert(objects, { name = name, object = fontObject })
+		end
+	end
+	return objects
+end
+
+function FriendlyNames:CaptureFontSnapshot()
+	if self.fontSnapshot then
+		return true
+	end
+
+	local fontObjects = self:GetFontObjects()
+	if #fontObjects ~= #FONT_OBJECT_NAMES then
+		return false
+	end
+
+	local snapshot = {}
+	for _, entry in ipairs(fontObjects) do
+		local ok, font, size, flags = pcall(entry.object.GetFont, entry.object)
+		if not ok or type(font) ~= "string" or type(size) ~= "number" then
+			return false
+		end
+		snapshot[entry.name] = {
+			font = font,
+			size = size,
+			flags = flags,
+		}
+	end
+
+	self.fontSnapshot = snapshot
+	return true
+end
+
+function FriendlyNames:SetManagedFontSize(size)
+	if not self.fontSnapshot then
+		return false
+	end
+
+	local fontObjects = self:GetFontObjects()
+	if #fontObjects ~= #FONT_OBJECT_NAMES then
+		return false
+	end
+
+	local success = true
+	for _, entry in ipairs(fontObjects) do
+		local snapshot = self.fontSnapshot[entry.name]
+		if not snapshot then
+			success = false
+		else
+			local ok, result = pcall(entry.object.SetFont, entry.object, snapshot.font, size, snapshot.flags)
+			if not ok or result == false then
+				success = false
+			end
+		end
+	end
+	return success
+end
+
+function FriendlyNames:ApplyFontSize()
+	if not self:IsCustomFontSizeActive() then
+		return self:RestoreFontSize()
+	end
+	if not self:CaptureFontSnapshot() then
+		return false
+	end
+	return self:SetManagedFontSize(self:GetFontSize())
+end
+
+function FriendlyNames:RestoreFontSize()
+	if not self.fontSnapshot then
+		return true
+	end
+
+	local fontObjects = self:GetFontObjects()
+	if #fontObjects ~= #FONT_OBJECT_NAMES then
+		return false
+	end
+
+	local success = true
+	for _, entry in ipairs(fontObjects) do
+		local snapshot = self.fontSnapshot[entry.name]
+		if not snapshot then
+			success = false
+		else
+			local ok, result = pcall(entry.object.SetFont, entry.object, snapshot.font, snapshot.size, snapshot.flags)
+			if not ok or result == false then
+				success = false
+			end
+		end
+	end
+
+	if success then
+		self.fontSnapshot = nil
+	end
+	return success
+end
+
+function FriendlyNames:ScheduleFontRefresh()
+	if self.fontRefreshScheduled or not self:IsCustomFontSizeActive() or not self:CaptureFontSnapshot() then
+		return
+	end
+
+	local fontSize = self:GetFontSize()
+	local refreshSize = fontSize > self.MIN_FONT_SIZE and fontSize - 1 or fontSize + 1
+	if not self:SetManagedFontSize(refreshSize) then
+		return
+	end
+
+	self.fontRefreshScheduled = true
+	local function applyFontSize()
+		self.fontRefreshScheduled = false
+		self:ApplyFontSize()
+	end
+	if type(C_Timer) == "table" and type(C_Timer.After) == "function" then
+		C_Timer.After(0, applyFontSize)
+	else
+		applyFontSize()
+	end
+end
+
+function FriendlyNames:IsFriendlyPlayerNameplate(unit)
+	if type(unit) ~= "string" or not unit:match("^nameplate") then
+		return false
+	end
+	if type(UnitIsFriend) ~= "function" then
+		return false
+	end
+
+	local friendOk, isFriend = pcall(UnitIsFriend, "player", unit)
+	if not friendOk or HTF:IsSecretValue(isFriend) or isFriend ~= true then
+		return false
+	end
+	if type(UnitIsPlayer) == "function" then
+		local playerOk, isPlayer = pcall(UnitIsPlayer, unit)
+		if not playerOk or HTF:IsSecretValue(isPlayer) or isPlayer ~= true then
+			return false
+		end
+	end
+	return true
+end
+
+function FriendlyNames:ApplyFontToNameplate(unit)
+	if not self:IsCustomFontSizeActive() or not self:IsFriendlyPlayerNameplate(unit)
+		or type(C_NamePlate) ~= "table" or type(C_NamePlate.GetNamePlateForUnit) ~= "function" then
+		return false
+	end
+
+	local ok, name = pcall(function()
+		local namePlate = C_NamePlate.GetNamePlateForUnit(unit)
+		return namePlate and namePlate.UnitFrame and namePlate.UnitFrame.name
+	end)
+	if not ok or not name or type(name.GetFont) ~= "function" or type(name.SetFont) ~= "function" then
+		return false
+	end
+
+	local fontOk, font, _, flags = pcall(name.GetFont, name)
+	if not fontOk or type(font) ~= "string" then
+		return false
+	end
+	local setOk, result = pcall(name.SetFont, name, font, self:GetFontSize(), flags)
+	return setOk and result ~= false
 end
 
 function FriendlyNames:GetSnapshot()
@@ -176,6 +385,15 @@ function FriendlyNames:Apply()
 		changed = namesOnlyChanged or changed
 	end
 
+	if snapshot[FRIENDLY_PLAYER_CLASS_COLORS_CVAR] ~= nil then
+		local classColorsSuccess, classColorsChanged = self:SetCVarValue(
+			FRIENDLY_PLAYER_CLASS_COLORS_CVAR,
+			HTF:GetSetting("friendlyNameClassColors") and "1" or "0"
+		)
+		success = classColorsSuccess and success
+		changed = classColorsChanged or changed
+	end
+
 	-- Never expose friendly health bars when either prerequisite cannot be applied.
 	local nameplatesValue = namesSuccess and namesOnlySuccess
 		and snapshot[FRIENDLY_PLAYER_NAMES_ONLY_CVAR] ~= nil
@@ -185,6 +403,7 @@ function FriendlyNames:Apply()
 	success = nameplatesSuccess and success
 	changed = nameplatesChanged or changed
 	self.changingCVars = false
+	self:ApplyFontSize()
 
 	if success and changed then
 		HTF:Debug(HTF.L.DEBUG_FRIENDLY_NAMES_APPLIED)
@@ -195,7 +414,7 @@ end
 function FriendlyNames:Restore()
 	local snapshot = self:GetSnapshot()
 	if not snapshot then
-		return true
+		return self:RestoreFontSize()
 	end
 
 	local success = true
@@ -208,6 +427,7 @@ function FriendlyNames:Restore()
 		end
 	end
 	self.changingCVars = false
+	success = self:RestoreFontSize() and success
 
 	if success then
 		HTF.db.friendlyNamesOnlySnapshot = nil
@@ -246,6 +466,9 @@ end
 function FriendlyNames:OnSettingChanged()
 	if HTF:GetSetting("friendlyNamesOnly") then
 		local success = self:Apply()
+		if self:IsCustomFontSizeActive() then
+			self:ScheduleFontRefresh()
+		end
 		if not success then
 			if self:GetSnapshot() then
 				HTF:Notify(HTF.L.FRIENDLY_NAMES_APPLY_PENDING)
@@ -273,8 +496,16 @@ function FriendlyNames:OnEvent(event, cvarName)
 		return
 	end
 
+	if event == "NAME_PLATE_UNIT_ADDED" then
+		if self:IsCustomFontSizeActive() and self:IsFriendlyPlayerNameplate(cvarName) and not self:ApplyFontToNameplate(cvarName) then
+			self:ScheduleFontRefresh()
+		end
+		return
+	end
+
 	if event == "PLAYER_ENTERING_WORLD" then
 		self:ScheduleSynchronize()
+		self:ScheduleFontRefresh()
 	end
 end
 
@@ -286,11 +517,19 @@ function FriendlyNames:Initialize()
 	if type(HTF.db.friendlyNamesOnly) ~= "boolean" then
 		HTF.db.friendlyNamesOnly = false
 	end
+	if type(HTF.db.friendlyNameClassColors) ~= "boolean" then
+		HTF.db.friendlyNameClassColors = false
+	end
+	if type(HTF.db.friendlyNameCustomFontSize) ~= "boolean" then
+		HTF.db.friendlyNameCustomFontSize = false
+	end
+	HTF.db.friendlyNameFontSize = normalizeFontSize(HTF.db.friendlyNameFontSize)
 
 	self.initialized = true
 	self.eventFrame = CreateFrame("Frame")
 	self.eventFrame:RegisterEvent("CVAR_UPDATE")
 	self.eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+	self.eventFrame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 	self.eventFrame:SetScript("OnEvent", function(_, event, ...)
 		self:OnEvent(event, ...)
 	end)

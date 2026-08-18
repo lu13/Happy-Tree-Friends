@@ -5,6 +5,8 @@ HTF.Stats = Stats
 
 Stats.MIN_FONT_SIZE = 10
 Stats.MAX_FONT_SIZE = 24
+Stats.MIN_SCALE = 0.70
+Stats.MAX_SCALE = 2.00
 Stats.DURABILITY_WARNING_THRESHOLD = 40
 Stats.DURABILITY_CRITICAL_THRESHOLD = 20
 Stats.BAG_WARNING_THRESHOLD = 5
@@ -63,6 +65,12 @@ local OVERLAY_BACKDROP = {
 	edgeFile = "Interface\\Buttons\\WHITE8x8",
 	edgeSize = 1,
 }
+
+local function applyBackdrop(frame, background, border)
+	frame:SetBackdrop(OVERLAY_BACKDROP)
+	frame:SetBackdropColor(background[1], background[2], background[3], background[4])
+	frame:SetBackdropBorderColor(border[1], border[2], border[3], border[4])
+end
 
 local ALERT_COLORS = {
 	warning = { 0.96, 0.72, 0.28 },
@@ -135,6 +143,11 @@ function Stats:NormalizeSettings()
 		db.statsFontSize = HTF.defaults.statsFontSize
 	else
 		db.statsFontSize = clamp(math.floor(db.statsFontSize + 0.5), self.MIN_FONT_SIZE, self.MAX_FONT_SIZE)
+	end
+	if type(db.statsScale) ~= "number" then
+		db.statsScale = HTF.defaults.statsScale
+	else
+		db.statsScale = clamp(db.statsScale, self.MIN_SCALE, self.MAX_SCALE)
 	end
 
 	if type(db.statsVisibility) ~= "table" then
@@ -225,6 +238,7 @@ function Stats:CreateOverlay()
 	overlay:SetSize(190, 100)
 	overlay:SetFrameStrata("MEDIUM")
 	overlay:SetMovable(true)
+	overlay:SetResizable(true)
 	overlay:SetClampedToScreen(true)
 	overlay:RegisterForDrag("LeftButton")
 	overlay:SetBackdrop(OVERLAY_BACKDROP)
@@ -248,6 +262,30 @@ function Stats:CreateOverlay()
 	overlay.status:SetTextColor(0.95, 0.72, 0.42, 1)
 	overlay.status:SetShadowColor(0, 0, 0, 1)
 	overlay.status:SetShadowOffset(2, -2)
+
+	overlay.resizeHandle = CreateFrame("Button", nil, overlay, "BackdropTemplate")
+	overlay.resizeHandle:SetSize(18, 18)
+	overlay.resizeHandle:SetPoint("BOTTOMRIGHT", overlay, "BOTTOMRIGHT", -4, 4)
+	overlay.resizeHandle:RegisterForDrag("LeftButton")
+	applyBackdrop(overlay.resizeHandle, { 0.12, 0.16, 0.23, 0.96 }, { 0.30, 0.89, 0.67, 0.95 })
+
+	overlay.resizeHandle.grip = overlay.resizeHandle:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	overlay.resizeHandle.grip:SetPoint("CENTER", 1, -1)
+	overlay.resizeHandle.grip:SetText("◢")
+	overlay.resizeHandle.grip:SetTextColor(0.70, 0.90, 0.82, 1)
+
+	overlay.resizeHandle:SetScript("OnEnter", function(handle)
+		handle:SetBackdropColor(0.16, 0.26, 0.30, 1)
+	end)
+	overlay.resizeHandle:SetScript("OnLeave", function(handle)
+		handle:SetBackdropColor(0.12, 0.16, 0.23, 0.96)
+	end)
+	overlay.resizeHandle:SetScript("OnDragStart", function()
+		self:BeginOverlayResize()
+	end)
+	overlay.resizeHandle:SetScript("OnDragStop", function()
+		self:FinishOverlayResize()
+	end)
 
 	overlay.rows = {}
 	for _, definition in ipairs(self.DISPLAY_DEFINITIONS) do
@@ -328,7 +366,11 @@ function Stats:LayoutOverlay()
 	end
 
 	local minimumHeight = locked and 16 or 34
-	self.overlay:SetSize(math.max(190, fontSize * 11), math.max(minimumHeight, -yOffset + 4))
+	self.overlayBaseWidth = math.max(190, fontSize * 11)
+	self.overlayBaseHeight = math.max(minimumHeight, -yOffset + 4)
+	if not self.resizingOverlay then
+		self.overlay:SetSize(self.overlayBaseWidth, self.overlayBaseHeight)
+	end
 	self.visibleRowCount = visibleCount
 end
 
@@ -340,15 +382,22 @@ function Stats:ApplyOverlaySettings()
 	self:NormalizeSettings()
 	local locked = HTF:GetSetting("statsLocked")
 	local fontSize = self:GetFontSize()
+	self.overlay:SetScale(self:GetScale())
 	self.overlay:EnableMouse(not locked)
 	if locked then
+		if self.resizingOverlay then
+			self.overlay:StopMovingOrSizing()
+			self.resizingOverlay = false
+		end
 		self.overlay:SetBackdropColor(0.04, 0.06, 0.09, 0)
 		self.overlay:SetBackdropBorderColor(0.30, 0.89, 0.67, 0)
 		self.overlay.title:Hide()
+		self.overlay.resizeHandle:Hide()
 	else
 		self.overlay:SetBackdropColor(0.04, 0.06, 0.09, 0.82)
 		self.overlay:SetBackdropBorderColor(0.30, 0.89, 0.67, 0.95)
 		self.overlay.title:Show()
+		self.overlay.resizeHandle:Show()
 	end
 
 	for _, definition in ipairs(self.DISPLAY_DEFINITIONS) do
@@ -369,7 +418,7 @@ function Stats:ApplyOverlaySettings()
 end
 
 function Stats:OnSettingChanged(key)
-	if key ~= "showStats" and key ~= "statsLocked" and key ~= "statsFontSize" then
+	if key ~= "showStats" and key ~= "statsLocked" and key ~= "statsFontSize" and key ~= "statsScale" then
 		return
 	end
 	self:ApplyOverlaySettings()
@@ -802,6 +851,70 @@ function Stats:SetFontSize(size)
 		return
 	end
 	HTF:SetSetting("statsFontSize", clamp(math.floor(size + 0.5), self.MIN_FONT_SIZE, self.MAX_FONT_SIZE))
+end
+
+function Stats:GetScale()
+	return HTF.db and HTF.db.statsScale or HTF.defaults.statsScale
+end
+
+function Stats:SetScale(scale)
+	if type(scale) ~= "number" then
+		return
+	end
+	HTF:SetSetting("statsScale", clamp(scale, self.MIN_SCALE, self.MAX_SCALE))
+end
+
+function Stats:BeginOverlayResize()
+	if not self.overlay or HTF:GetSetting("statsLocked") or self.resizingOverlay then
+		return
+	end
+
+	local baseWidth = self.overlayBaseWidth or self.overlay:GetWidth()
+	local baseHeight = self.overlayBaseHeight or self.overlay:GetHeight()
+	local currentScale = self:GetScale()
+	if type(baseWidth) ~= "number" or type(baseHeight) ~= "number" or baseWidth <= 0 or baseHeight <= 0 then
+		return
+	end
+
+	self.resizingOverlay = true
+	self.resizeBaseWidth = baseWidth
+	self.resizeBaseHeight = baseHeight
+	self.resizeInitialScale = currentScale
+	if type(self.overlay.SetResizeBounds) == "function" then
+		self.overlay:SetResizeBounds(
+			baseWidth * self.MIN_SCALE / currentScale,
+			baseHeight * self.MIN_SCALE / currentScale,
+			baseWidth * self.MAX_SCALE / currentScale,
+			baseHeight * self.MAX_SCALE / currentScale
+		)
+	end
+	self.overlay:StartSizing("BOTTOMRIGHT")
+end
+
+function Stats:FinishOverlayResize()
+	if not self.overlay or not self.resizingOverlay then
+		return
+	end
+
+	local baseWidth = self.resizeBaseWidth
+	local baseHeight = self.resizeBaseHeight
+	local initialScale = self.resizeInitialScale
+	local width = self.overlay:GetWidth()
+	local height = self.overlay:GetHeight()
+	self.overlay:StopMovingOrSizing()
+	self.resizingOverlay = false
+	self.resizeBaseWidth = nil
+	self.resizeBaseHeight = nil
+	self.resizeInitialScale = nil
+
+	if type(baseWidth) ~= "number" or type(baseHeight) ~= "number" or type(initialScale) ~= "number"
+		or type(width) ~= "number" or type(height) ~= "number" or baseWidth <= 0 or baseHeight <= 0 then
+		self:ApplyOverlaySettings()
+		return
+	end
+
+	local resizeRatio = math.max(width / baseWidth, height / baseHeight)
+	self:SetScale(initialScale * resizeRatio)
 end
 
 function Stats:ResetPosition()

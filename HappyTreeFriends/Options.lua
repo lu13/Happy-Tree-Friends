@@ -477,10 +477,44 @@ end
 function Options:CreateNameplatesPage(page)
 	self:AddPageHeader(page, HTF.L.NAMEPLATES, HTF.L.NAMEPLATES_PAGE_HELP)
 	self:CreateToggleRow(page, -96, "friendlyNamesOnly", HTF.L.FRIENDLY_NAMES_ONLY, HTF.L.FRIENDLY_NAMES_ONLY_DESC)
+	self.friendlyNameClassColorToggleRow = self:CreateCompactToggleRow(page, "left", -180, "friendlyNameClassColors", HTF.L.FRIENDLY_NAME_CLASS_COLORS, HTF.L.FRIENDLY_NAME_CLASS_COLORS_DESC)
+	self.friendlyNameFontToggleRow = self:CreateCompactToggleRow(page, "right", -180, "friendlyNameCustomFontSize", HTF.L.FRIENDLY_NAME_CUSTOM_FONT_SIZE, HTF.L.FRIENDLY_NAME_CUSTOM_FONT_SIZE_DESC)
+
+	local controlCard = CreateFrame("Frame", nil, page, "BackdropTemplate")
+	controlCard:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -250)
+	controlCard:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, -250)
+	controlCard:SetHeight(52)
+	applyBackdrop(controlCard, COLORS.sidebar, COLORS.border)
+
+	local fontLabel = createText(controlCard, "GameFontNormal", HTF.L.FRIENDLY_NAME_FONT_SIZE, 12, COLORS.text)
+	fontLabel:SetPoint("LEFT", 13, 0)
+
+	local minusButton = createActionButton(controlCard, "−")
+	minusButton:SetSize(28, 26)
+	minusButton:SetPoint("LEFT", fontLabel, "RIGHT", 12, 0)
+	minusButton:SetScript("OnClick", function()
+		HTF.FriendlyNames:SetFontSize(HTF.FriendlyNames:GetFontSize() - 1)
+	end)
+
+	self.friendlyNameFontValue = createText(controlCard, "GameFontNormal", "", 12, COLORS.accent)
+	self.friendlyNameFontValue:SetPoint("LEFT", minusButton, "RIGHT", 10, 0)
+	self.friendlyNameFontValue:SetWidth(24)
+	self.friendlyNameFontValue:SetJustifyH("CENTER")
+
+	local plusButton = createActionButton(controlCard, "+")
+	plusButton:SetSize(28, 26)
+	plusButton:SetPoint("LEFT", self.friendlyNameFontValue, "RIGHT", 10, 0)
+	plusButton:SetScript("OnClick", function()
+		HTF.FriendlyNames:SetFontSize(HTF.FriendlyNames:GetFontSize() + 1)
+	end)
+
+	local fontHint = createText(controlCard, "GameFontHighlightSmall", HTF.L.FRIENDLY_NAME_FONT_SIZE_HELP, 10, COLORS.muted)
+	fontHint:SetPoint("RIGHT", controlCard, "RIGHT", -13, 0)
+	fontHint:SetJustifyH("RIGHT")
 
 	local note = CreateFrame("Frame", nil, page, "BackdropTemplate")
-	note:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -188)
-	note:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, -188)
+	note:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -316)
+	note:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, -316)
 	note:SetHeight(88)
 	applyBackdrop(note, COLORS.sidebar, COLORS.border)
 
@@ -527,6 +561,12 @@ function Options:RefreshStatSettings()
 		for key in pairs(self.statSettingRows) do
 			self:RefreshStatSetting(key)
 		end
+	end
+end
+
+function Options:RefreshFriendlyNameSettings()
+	if self.friendlyNameFontValue and HTF.FriendlyNames and HTF.FriendlyNames.GetFontSize then
+		self.friendlyNameFontValue:SetText(tostring(HTF.FriendlyNames:GetFontSize()))
 	end
 end
 
@@ -660,11 +700,35 @@ function Options:CreatePanel()
 	self.navigation = {}
 	self.pages = {}
 
-	local panel = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+	local panel = CreateFrame("Frame", "HappyTreeFriendsSettingsFrame", UIParent, "BackdropTemplate")
 	panel.name = HTF.L.ADDON_NAME
 	panel:SetSize(840, 600)
+	panel:SetFrameStrata("DIALOG")
+	panel:SetToplevel(true)
+	panel:SetClampedToScreen(true)
 	applyBackdrop(panel, COLORS.background, COLORS.border)
 	self.panel = panel
+
+	if type(UISpecialFrames) == "table" then
+		local alreadyRegistered = false
+		for _, frameName in ipairs(UISpecialFrames) do
+			if frameName == panel:GetName() then
+				alreadyRegistered = true
+				break
+			end
+		end
+		if not alreadyRegistered then
+			table.insert(UISpecialFrames, panel:GetName())
+		end
+	end
+
+	local closeButton = createActionButton(panel, "×")
+	closeButton:SetSize(28, 28)
+	closeButton:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -12, -12)
+	closeButton:SetScript("OnClick", function()
+		panel:Hide()
+	end)
+	self.closeButton = closeButton
 
 	local sidebar = CreateFrame("Frame", nil, panel, "BackdropTemplate")
 	sidebar:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
@@ -780,6 +844,7 @@ function Options:SelectPage(key)
 
 	self:RefreshOverview()
 	self:RefreshStatSettings()
+	self:RefreshFriendlyNameSettings()
 	self:RefreshMerchantLedger()
 	self:RefreshDebugLog()
 end
@@ -837,6 +902,7 @@ function Options:Refresh()
 	end
 	self:RefreshOverview()
 	self:RefreshStatSettings()
+	self:RefreshFriendlyNameSettings()
 	self:RefreshMerchantLedger()
 	self:RefreshDebugLog()
 end
@@ -848,15 +914,10 @@ function Options:Open(page)
 	end
 
 	self:SelectPage(page or "overview")
-	local categoryID = self:GetCategoryID()
-	if categoryID and type(Settings) == "table" and type(Settings.OpenToCategory) == "function" then
-		Settings.OpenToCategory(categoryID)
-	else
-		self.panel:ClearAllPoints()
-		self.panel:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-		self.panel:SetFrameStrata("DIALOG")
-		self.panel:Show()
-	end
+	self.panel:ClearAllPoints()
+	self.panel:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+	self.panel:SetFrameStrata("DIALOG")
+	self.panel:Show()
 	self:Refresh()
 end
 

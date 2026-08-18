@@ -1,7 +1,7 @@
 local ADDON_NAME, HTF = ...
 
 HTF.ADDON_NAME = ADDON_NAME
-HTF.VERSION = "0.5.0"
+HTF.VERSION = "0.6.0"
 HTF.MAX_DEBUG_LOG_ENTRIES = 80
 HTF.debugLog = {}
 
@@ -11,9 +11,13 @@ HTF.defaults = {
 	autoSellJunk = false,
 	protectedJunkItems = {},
 	friendlyNamesOnly = false,
+	friendlyNameClassColors = false,
+	friendlyNameCustomFontSize = false,
+	friendlyNameFontSize = 14,
 	showStats = true,
 	statsLocked = true,
 	statsFontSize = 15,
+	statsScale = 1,
 	statsPosition = {
 		point = "TOPRIGHT",
 		relativePoint = "TOPRIGHT",
@@ -117,7 +121,12 @@ function HTF:SetSetting(key, value)
 	end
 
 	self.db[key] = value
-	if self.FriendlyNames and self.FriendlyNames.OnSettingChanged and key == "friendlyNamesOnly" then
+	if self.FriendlyNames and self.FriendlyNames.OnSettingChanged and (
+		key == "friendlyNamesOnly"
+		or key == "friendlyNameClassColors"
+		or key == "friendlyNameCustomFontSize"
+		or key == "friendlyNameFontSize"
+	) then
 		self.FriendlyNames:OnSettingChanged()
 	end
 	if self.Stats and self.Stats.OnSettingChanged then
@@ -244,10 +253,12 @@ function HTF:BuildDiagnosticReport()
 		"Settings:",
 	}
 
-	for _, key in ipairs({ "autoRepair", "repairFromGuild", "autoSellJunk", "friendlyNamesOnly", "showStats", "statsLocked", "showNotifications", "debug" }) do
+	for _, key in ipairs({ "autoRepair", "repairFromGuild", "autoSellJunk", "friendlyNamesOnly", "friendlyNameClassColors", "friendlyNameCustomFontSize", "showStats", "statsLocked", "showNotifications", "debug" }) do
 		table.insert(lines, string.format("- %s: %s", key, tostring(self:GetSetting(key) == true)))
 	end
+	table.insert(lines, string.format("- friendlyNameFontSize: %s", self:SafeScalarText(self:GetSetting("friendlyNameFontSize"))))
 	table.insert(lines, string.format("- statsFontSize: %s", self:SafeScalarText(self:GetSetting("statsFontSize"))))
+	table.insert(lines, string.format("- statsScale: %s", self:SafeScalarText(self:GetSetting("statsScale"))))
 	if self.Stats then
 		table.insert(lines, string.format("- visibleStats: %d/%d", self.Stats:GetVisibleStatCount(), #self.Stats.STAT_DEFINITIONS))
 		table.insert(lines, string.format("- visibleAdventureStatus: %d/%d", self.Stats:GetVisibleAdventureStatusCount(), #self.Stats.ADVENTURE_DEFINITIONS))
