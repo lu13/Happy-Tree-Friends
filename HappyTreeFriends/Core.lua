@@ -1,7 +1,7 @@
 local ADDON_NAME, HTF = ...
 
 HTF.ADDON_NAME = ADDON_NAME
-HTF.VERSION = "0.2.0"
+HTF.VERSION = "0.2.1"
 HTF.MAX_DEBUG_LOG_ENTRIES = 80
 HTF.debugLog = {}
 
@@ -11,7 +11,7 @@ HTF.defaults = {
 	autoSellJunk = false,
 	showStats = true,
 	statsLocked = true,
-	statsFontSize = 14,
+	statsFontSize = 15,
 	statsPosition = {
 		point = "TOPRIGHT",
 		relativePoint = "TOPRIGHT",

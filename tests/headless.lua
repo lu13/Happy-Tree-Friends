@@ -146,6 +146,15 @@ function objectMethods:SetFont(font, size, flags)
 	self.font = font
 	self.fontSize = size
 	self.fontFlags = flags
+	return true
+end
+
+function objectMethods:SetShadowColor(r, g, b, a)
+	self.shadowColor = { r, g, b, a }
+end
+
+function objectMethods:SetShadowOffset(x, y)
+	self.shadowOffset = { x, y }
 end
 
 function objectMethods:GetStringHeight()
@@ -216,8 +225,6 @@ local noOpMethods = {
 	"SetJustifyV",
 	"SetTexture",
 	"SetFrameStrata",
-	"SetShadowColor",
-	"SetShadowOffset",
 	"SetMultiLine",
 	"SetAutoFocus",
 	"SetFontObject",
@@ -569,7 +576,7 @@ for _, path in ipairs({
 end
 
 fireEvent("ADDON_LOADED", "HappyTreeFriends")
-equal(HTF.VERSION, "0.2.0", "addon version")
+equal(HTF.VERSION, "0.2.1", "addon version")
 equal(#HTF.debugLog, 80, "saved log is normalized to its cap")
 equal(HTF.debugLog[1], "seed-2", "normalization keeps the newest valid entries")
 check(HTF.debugLog == HappyTreeFriendsDB.debugLog, "runtime log must share the SavedVariables table")
@@ -577,7 +584,7 @@ equal(HTF:GetSetting("autoRepair"), false, "auto repair defaults off")
 equal(HTF:GetSetting("repairFromGuild"), false, "guild repair defaults off")
 equal(HTF:GetSetting("autoSellJunk"), false, "auto sell defaults off")
 equal(HTF:GetSetting("statsLocked"), true, "stats overlay defaults locked")
-equal(HTF:GetSetting("statsFontSize"), 14, "stats overlay default font size")
+equal(HTF:GetSetting("statsFontSize"), 15, "stats overlay default font size")
 equal(HTF.Stats:GetVisibleStatCount(), 14, "all stats default visible")
 
 check(HTF.Stats.overlay ~= nil, "stats overlay is created during addon initialization")
@@ -590,7 +597,12 @@ check(not HTF.Stats.overlay.title:IsShown(), "locked overlay hides its drag hint
 check(HTF.Stats.overlay.movable, "stats overlay is movable")
 check(HTF.Stats.overlay.clampedToScreen, "stats overlay stays clamped to screen")
 equal(HTF.Stats.overlay.dragButtons[1], "LeftButton", "stats overlay uses left-button drag")
-equal(HTF.Stats.overlay.rows.strength.fontSize, 14, "overlay applies the configured font size")
+equal(HTF.Stats.overlay.rows.strength.fontSize, 15, "overlay applies the configured font size")
+equal(HTF.Stats.overlay.rows.strength.fontFlags, "THICKOUTLINE", "overlay stat text uses a thick outline")
+equal(HTF.Stats.overlay.rows.strength.shadowColor[4], 1, "overlay stat text uses an opaque black shadow")
+equal(HTF.Stats.overlay.rows.strength.shadowOffset[1], 2, "overlay stat shadow has a visible horizontal offset")
+equal(HTF.Stats.overlay.rows.strength.shadowOffset[2], -2, "overlay stat shadow has a visible vertical offset")
+equal(HTF.Stats.overlay.status.fontFlags, "THICKOUTLINE", "overlay status text uses the same strong outline")
 check(HTF.Stats.overlay.rows.strength.textColor[1] ~= HTF.Stats.overlay.rows.agility.textColor[1], "default stat rows use distinct colors")
 
 for _, frame in ipairs(frames) do
@@ -618,11 +630,22 @@ equal(HTF.Options:GetCategoryID(), 120101, "registered category exposes its nume
 check(HTF.Options.debugScrollFrame.ScrollBar ~= nil, "12.1 scroll template exposes its scrollbar through parentKey")
 equal(HTF.Options.debugScrollFrame:GetName(), nil, "anonymous 12.1 scroll template remains supported")
 
+local customerCopy = {}
+for _, frame in ipairs(frames) do
+	if frame.kind == "FontString" then
+		table.insert(customerCopy, frame:GetText())
+	end
+end
+local allCustomerCopy = table.concat(customerCopy, "\n")
+for _, developerPhrase in ipairs({ "OnUpdate", "轮询", "扫描背包", "MVP", "12.1 原生规则" }) do
+	check(not allCustomerCopy:find(developerPhrase, 1, true), "customer-facing UI omits developer phrase: " .. developerPhrase)
+end
+
 local resizedFontCount = 0
 for _, frame in ipairs(frames) do
 	if frame.kind == "FontString" and frame.fontSize then
 		resizedFontCount = resizedFontCount + 1
-		equal(frame.fontFlags, "OUTLINE", "resizing text preserves template font flags")
+		check(frame.fontFlags == "OUTLINE" or frame.fontFlags == "THICKOUTLINE", "resized text keeps an explicit outline")
 	end
 end
 check(resizedFontCount > 0, "font preservation check inspected created text")
@@ -642,7 +665,25 @@ for _ in pairs(HTF.Options.statSettingRows) do
 	configuredStatRows = configuredStatRows + 1
 end
 equal(configuredStatRows, 14, "settings page exposes all stat visibility/color controls")
-equal(HTF.Options.statsFontValue:GetText(), "14", "settings page displays the active font size")
+equal(HTF.Options.statsFontValue:GetText(), "15", "settings page displays the active font size")
+
+local leftToggle = HTF.Options.statsDisplayToggleRow
+local rightToggle = HTF.Options.statsLockToggleRow
+equal(leftToggle.width, nil, "left stats toggle does not use a fixed width")
+equal(rightToggle.width, nil, "right stats toggle does not use a fixed width")
+equal(#leftToggle.points, 2, "left stats toggle stretches between two responsive anchors")
+equal(leftToggle.points[1][3], "TOPLEFT", "left stats toggle starts at the content edge")
+equal(leftToggle.points[2][3], "TOP", "left stats toggle ends at the content midpoint")
+equal(rightToggle.points[1][3], "TOP", "right stats toggle starts at the content midpoint")
+equal(rightToggle.points[2][3], "TOPRIGHT", "right stats toggle ends at the content edge")
+
+local leftStatRow = HTF.Options.statSettingRows.strength
+local rightStatRow = HTF.Options.statSettingRows.mastery
+equal(leftStatRow.width, nil, "left stat control does not use a fixed width")
+equal(rightStatRow.width, nil, "right stat control does not use a fixed width")
+equal(leftStatRow.points[2][3], "TOP", "left stat control is constrained to the content midpoint")
+equal(rightStatRow.points[1][3], "TOP", "right stat control begins at the content midpoint")
+equal(rightStatRow.points[2][3], "TOPRIGHT", "right stat control remains inside the content edge")
 
 HTF.Options.panel:Hide()
 local readsBeforeHiddenPanelEvent = statReads
@@ -957,7 +998,7 @@ local report = HTF:BuildDiagnosticReport()
 contains(report, "Happy Tree Friends - Diagnostic Report", "diagnostic report header")
 contains(report, "WoW build: 69299", "diagnostic report build")
 contains(report, "repairFromGuild: false", "diagnostic report includes guild repair setting")
-contains(report, "statsFontSize: 14", "diagnostic report includes HUD font size")
+contains(report, "statsFontSize: 15", "diagnostic report includes HUD font size")
 contains(report, "visibleStats: 14/14", "diagnostic report includes visible HUD stat count")
 contains(report, "statsPosition:", "diagnostic report includes HUD position")
 contains(report, "Persisted debug log (80/80)", "diagnostic report log count")

@@ -65,6 +65,16 @@ local function copyColor(color)
 	return { color[1], color[2], color[3] }
 end
 
+local function applyHighContrastFont(fontString, size)
+	local font = fontString:GetFont()
+	if not font then
+		return
+	end
+	if fontString:SetFont(font, size, "THICKOUTLINE") == false then
+		fontString:SetFont(font, size, "OUTLINE")
+	end
+end
+
 function Stats:GetStatDefinition(key)
 	return definitionByKey[key]
 end
@@ -201,14 +211,14 @@ function Stats:CreateOverlay()
 	overlay.status:SetJustifyH("LEFT")
 	overlay.status:SetTextColor(0.95, 0.72, 0.42, 1)
 	overlay.status:SetShadowColor(0, 0, 0, 1)
-	overlay.status:SetShadowOffset(1, -1)
+	overlay.status:SetShadowOffset(2, -2)
 
 	overlay.rows = {}
 	for _, definition in ipairs(self.STAT_DEFINITIONS) do
 		local row = overlay:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 		row:SetJustifyH("LEFT")
 		row:SetShadowColor(0, 0, 0, 1)
-		row:SetShadowOffset(1, -1)
+		row:SetShadowOffset(2, -2)
 		row:SetText(string.format("%s: %s", self:GetStatLabel(definition.key), HTF.L.STAT_UNAVAILABLE))
 		overlay.rows[definition.key] = row
 	end
@@ -251,7 +261,7 @@ function Stats:LayoutOverlay()
 
 	local locked = HTF:GetSetting("statsLocked")
 	local fontSize = self:GetFontSize()
-	local lineHeight = fontSize + 4
+	local lineHeight = fontSize + 5
 	local yOffset = locked and -4 or -27
 	local visibleCount = 0
 
@@ -307,13 +317,11 @@ function Stats:ApplyOverlaySettings()
 
 	for _, definition in ipairs(self.STAT_DEFINITIONS) do
 		local row = self.overlay.rows[definition.key]
-		local font, _, flags = row:GetFont()
-		if font then
-			row:SetFont(font, fontSize, flags)
-		end
+		applyHighContrastFont(row, fontSize)
 		local r, g, b = self:GetStatColor(definition.key)
 		row:SetTextColor(r, g, b, 1)
 	end
+	applyHighContrastFont(self.overlay.status, 11)
 
 	self:ApplyPosition()
 	self:LayoutOverlay()

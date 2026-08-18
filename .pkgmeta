@@ -1,0 +1,9 @@
+package-as: HappyTreeFriends
+move-folders:
+  HappyTreeFriends/HappyTreeFriends: HappyTreeFriends
+ignore:
+  - README.md
+  - tests
+  - HappyTreeFriends-0.1.0.zip
+  - HappyTreeFriends-0.1.1.zip
+  - HappyTreeFriends-0.2.0.zip

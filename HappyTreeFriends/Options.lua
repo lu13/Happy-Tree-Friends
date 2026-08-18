@@ -61,6 +61,16 @@ local function createActionButton(parent, text)
 	return button
 end
 
+local function anchorTwoColumnRow(frame, parent, column, yOffset)
+	if column == "left" then
+		frame:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, yOffset)
+		frame:SetPoint("TOPRIGHT", parent, "TOP", -6, yOffset)
+	else
+		frame:SetPoint("TOPLEFT", parent, "TOP", 6, yOffset)
+		frame:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -20, yOffset)
+	end
+end
+
 function Options:CreateToggleRow(parent, yOffset, settingKey, title, description)
 	local row = CreateFrame("Button", nil, parent, "BackdropTemplate")
 	row:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, yOffset)
@@ -123,10 +133,10 @@ function Options:CreateToggleRow(parent, yOffset, settingKey, title, description
 	return row
 end
 
-function Options:CreateCompactToggleRow(parent, xOffset, yOffset, settingKey, title, description)
+function Options:CreateCompactToggleRow(parent, column, yOffset, settingKey, title, description)
 	local row = CreateFrame("Button", nil, parent, "BackdropTemplate")
-	row:SetPoint("TOPLEFT", parent, "TOPLEFT", xOffset, yOffset)
-	row:SetSize(278, 58)
+	anchorTwoColumnRow(row, parent, column, yOffset)
+	row:SetHeight(58)
 	applyBackdrop(row, COLORS.panel, COLORS.border)
 
 	local titleText = createText(row, "GameFontNormal", title, 13, COLORS.text)
@@ -249,7 +259,7 @@ function Options:CreateOverviewPage(page)
 	card:SetHeight(118)
 	applyBackdrop(card, COLORS.panel, COLORS.border)
 
-	local title = createText(card, "GameFontNormal", "MVP · WoW Retail 12.1", 14, COLORS.text)
+	local title = createText(card, "GameFontNormal", "轻松管理你的日常功能", 14, COLORS.text)
 	title:SetPoint("TOPLEFT", 16, -15)
 
 	local body = createText(card, "GameFontHighlightSmall", HTF.L.SETTINGS_HELP, 12, COLORS.muted)
@@ -293,7 +303,7 @@ function Options:CreateOverviewPage(page)
 end
 
 function Options:CreateMerchantPage(page)
-	self:AddPageHeader(page, HTF.L.MERCHANT, "仅在打开商人窗口时执行；不扫描背包，也不使用常驻轮询。")
+	self:AddPageHeader(page, HTF.L.MERCHANT, "按你的习惯设置修理、售卖与操作提示。")
 
 	self:CreateToggleRow(page, -84, "autoRepair", HTF.L.AUTO_REPAIR, HTF.L.AUTO_REPAIR_DESC)
 	self:CreateToggleRow(page, -156, "repairFromGuild", HTF.L.REPAIR_FROM_GUILD, HTF.L.REPAIR_FROM_GUILD_DESC)
@@ -306,17 +316,17 @@ function Options:CreateMerchantPage(page)
 	note:SetHeight(88)
 	applyBackdrop(note, COLORS.sidebar, COLORS.border)
 
-	local noteText = createText(note, "GameFontHighlightSmall", HTF.L.AUTO_ACTIONS_NOTICE .. " 公会维修遵循 12.1 原生规则：有权限时优先使用可用额度，额度不足由个人金币补足；关闭公会选项后始终只用个人金币。自动售卖只处理有售价的灰色物品。", 11, COLORS.muted)
+	local noteText = createText(note, "GameFontHighlightSmall", HTF.L.AUTO_ACTIONS_NOTICE .. " 公会维修开启后，有权限时优先使用可用额度，不足部分由个人金币补足；关闭后只用个人金币。自动售卖只处理可出售的灰色物品。", 11, COLORS.muted)
 	noteText:SetPoint("TOPLEFT", 14, -13)
 	noteText:SetPoint("TOPRIGHT", -14, -13)
 	noteText:SetJustifyH("LEFT")
 	noteText:SetJustifyV("TOP")
 end
 
-function Options:CreateStatSettingRow(parent, xOffset, yOffset, key, label)
+function Options:CreateStatSettingRow(parent, column, yOffset, key, label)
 	local row = CreateFrame("Button", nil, parent, "BackdropTemplate")
-	row:SetPoint("TOPLEFT", parent, "TOPLEFT", xOffset, yOffset)
-	row:SetSize(278, 29)
+	anchorTwoColumnRow(row, parent, column, yOffset)
+	row:SetHeight(29)
 	applyBackdrop(row, COLORS.panel, COLORS.border)
 
 	row.indicator = row:CreateTexture(nil, "ARTWORK")
@@ -372,9 +382,9 @@ function Options:CreateStatSettingRow(parent, xOffset, yOffset, key, label)
 end
 
 function Options:CreateStatsPage(page)
-	self:AddPageHeader(page, HTF.L.CHARACTER_STATS, "管理游戏画面上的透明属性悬浮层；数值由事件触发刷新，不使用持续轮询。")
-	self:CreateCompactToggleRow(page, 20, -84, "showStats", HTF.L.SHOW_STATS, HTF.L.SHOW_STATS_DESC)
-	self:CreateCompactToggleRow(page, 316, -84, "statsLocked", HTF.L.LOCK_STATS, HTF.L.LOCK_STATS_DESC)
+	self:AddPageHeader(page, HTF.L.CHARACTER_STATS, "自定义游戏画面中的属性悬浮层，调整位置、字号、显示项目与配色。")
+	self.statsDisplayToggleRow = self:CreateCompactToggleRow(page, "left", -84, "showStats", HTF.L.SHOW_STATS, HTF.L.SHOW_STATS_DESC)
+	self.statsLockToggleRow = self:CreateCompactToggleRow(page, "right", -84, "statsLocked", HTF.L.LOCK_STATS, HTF.L.LOCK_STATS_DESC)
 
 	local controlCard = CreateFrame("Frame", nil, page, "BackdropTemplate")
 	controlCard:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -150)
@@ -423,10 +433,9 @@ function Options:CreateStatsPage(page)
 
 	self.statSettingRows = {}
 	for index, definition in ipairs(HTF.Stats.STAT_DEFINITIONS) do
-		local column = index <= 7 and 0 or 1
-		local rowIndex = column == 0 and index or index - 7
-		local xOffset = column == 0 and 20 or 316
-		self:CreateStatSettingRow(page, xOffset, -242 - (rowIndex - 1) * 34, definition.key, HTF.Stats:GetStatLabel(definition.key))
+		local column = index <= 7 and "left" or "right"
+		local rowIndex = column == "left" and index or index - 7
+		self:CreateStatSettingRow(page, column, -242 - (rowIndex - 1) * 34, definition.key, HTF.Stats:GetStatLabel(definition.key))
 	end
 end
 
@@ -480,7 +489,7 @@ end
 
 function Options:CreateDebugPage(page)
 	local options = self
-	self:AddPageHeader(page, HTF.L.DEBUG, "用于定位商人事件、自动操作及属性刷新中的实际运行情况。")
+	self:AddPageHeader(page, HTF.L.DEBUG, "遇到问题时，可在这里记录运行信息并生成诊断报告。")
 	self:CreateToggleRow(page, -96, "debug", HTF.L.DEBUG_MODE, HTF.L.DEBUG_MODE_DESC)
 	self.showingDiagnosticReport = false
 
@@ -615,7 +624,7 @@ function Options:CreatePanel()
 	brand:SetPoint("TOPLEFT", 18, -22)
 	local tree = createText(sidebar, "GameFontNormalLarge", "Tree Friends", 22, COLORS.accent)
 	tree:SetPoint("TOPLEFT", brand, "BOTTOMLEFT", 0, -1)
-	local version = createText(sidebar, "GameFontHighlightSmall", "MVP " .. HTF.VERSION, 10, COLORS.muted)
+	local version = createText(sidebar, "GameFontHighlightSmall", "版本 " .. HTF.VERSION, 10, COLORS.muted)
 	version:SetPoint("TOPLEFT", tree, "BOTTOMLEFT", 0, -7)
 
 	self:CreateNavigationButton(sidebar, "overview", HTF.L.OVERVIEW, -116)
