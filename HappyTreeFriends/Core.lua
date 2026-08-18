@@ -1,7 +1,7 @@
 local ADDON_NAME, HTF = ...
 
 HTF.ADDON_NAME = ADDON_NAME
-HTF.VERSION = "0.4.0"
+HTF.VERSION = "0.5.0"
 HTF.MAX_DEBUG_LOG_ENTRIES = 80
 HTF.debugLog = {}
 
@@ -9,6 +9,7 @@ HTF.defaults = {
 	autoRepair = false,
 	repairFromGuild = false,
 	autoSellJunk = false,
+	protectedJunkItems = {},
 	friendlyNamesOnly = false,
 	showStats = true,
 	statsLocked = true,
@@ -34,6 +35,10 @@ HTF.defaults = {
 		speed = true,
 		dodge = true,
 		parry = true,
+		durability = false,
+		bagSpace = false,
+		money = false,
+		latency = false,
 	},
 	statsColors = {
 		strength = { 0.96, 0.45, 0.42 },
@@ -50,6 +55,10 @@ HTF.defaults = {
 		speed = { 0.48, 0.93, 0.68 },
 		dodge = { 0.69, 0.88, 0.34 },
 		parry = { 1.00, 0.61, 0.31 },
+		durability = { 0.95, 0.74, 0.35 },
+		bagSpace = { 0.39, 0.83, 0.98 },
+		money = { 1.00, 0.84, 0.30 },
+		latency = { 0.64, 0.76, 1.00 },
 	},
 	showNotifications = true,
 	debug = false,
@@ -216,6 +225,7 @@ function HTF:BuildDiagnosticReport()
 	local inCombat = type(InCombatLockdown) == "function" and InCombatLockdown() or false
 	local inCombatText = self:IsSecretValue(inCombat) and "<restricted>" or tostring(inCombat == true)
 	local merchant = self.Merchant or {}
+	local ledger = merchant.GetSessionLedger and merchant:GetSessionLedger() or nil
 	local timestamp = date and date("%Y-%m-%d %H:%M:%S") or "unknown"
 	local lines = {
 		"Happy Tree Friends - Diagnostic Report",
@@ -229,6 +239,7 @@ function HTF:BuildDiagnosticReport()
 		"In combat lockdown: " .. inCombatText,
 		"Merchant open: " .. tostring(merchant.merchantOpen == true),
 		"Merchant action pending: " .. tostring(merchant.pendingRun == true),
+		"Protected junk item IDs: " .. tostring(merchant.GetProtectedJunkItemCount and merchant:GetProtectedJunkItemCount() or 0),
 		"",
 		"Settings:",
 	}
@@ -239,7 +250,13 @@ function HTF:BuildDiagnosticReport()
 	table.insert(lines, string.format("- statsFontSize: %s", self:SafeScalarText(self:GetSetting("statsFontSize"))))
 	if self.Stats then
 		table.insert(lines, string.format("- visibleStats: %d/%d", self.Stats:GetVisibleStatCount(), #self.Stats.STAT_DEFINITIONS))
+		table.insert(lines, string.format("- visibleAdventureStatus: %d/%d", self.Stats:GetVisibleAdventureStatusCount(), #self.Stats.ADVENTURE_DEFINITIONS))
 		table.insert(lines, "- statsPosition: " .. self.Stats:GetPositionSummary())
+	end
+	if ledger then
+		table.insert(lines, string.format("- sessionRepairs: %s", self:FormatMoney(ledger.repairTotal)))
+		table.insert(lines, string.format("- sessionJunkIncome: %s", ledger.junkIncomeKnown and self:FormatMoney(ledger.junkIncome) or "<unavailable>"))
+		table.insert(lines, string.format("- sessionProtectedJunkSkipped: %d", #ledger.skippedItemOrder))
 	end
 
 	table.insert(lines, "")
@@ -298,7 +315,10 @@ function HTF:OpenOptions(page)
 end
 
 function HTF:HandleSlashCommand(input)
-	local command = string.lower(trim(input))
+	local rawInput = trim(input)
+	local command, argument = rawInput:match("^(%S+)%s*(.-)$")
+	command = string.lower(command or "")
+	argument = trim(argument)
 
 	if command == "debug" then
 		local enabled = not self:GetSetting("debug")
@@ -322,6 +342,40 @@ function HTF:HandleSlashCommand(input)
 
 	if command == "nameplates" or command == self.L.COMMAND_NAMEPLATES_ALIAS then
 		self:OpenOptions("nameplates")
+		return
+	end
+
+	if command == "protect" or command == self.L.COMMAND_PROTECT_ALIAS then
+		local itemID = self.Merchant and self.Merchant:ExtractItemID(argument)
+		if not itemID or not self.Merchant:SetJunkItemProtected(itemID, true) then
+			self:Notify(self.L.JUNK_PROTECTION_USAGE)
+			return
+		end
+		self:Notify(string.format(self.L.JUNK_PROTECTION_ADDED, itemID))
+		return
+	end
+
+	if command == "unprotect" or command == self.L.COMMAND_UNPROTECT_ALIAS then
+		local itemID = self.Merchant and self.Merchant:ExtractItemID(argument)
+		if not itemID or not self.Merchant:SetJunkItemProtected(itemID, false) then
+			self:Notify(self.L.JUNK_PROTECTION_USAGE)
+			return
+		end
+		self:Notify(string.format(self.L.JUNK_PROTECTION_REMOVED, itemID))
+		return
+	end
+
+	if command == "protected" or command == self.L.COMMAND_PROTECTED_ALIAS then
+		local itemIDs = self.Merchant and self.Merchant:GetProtectedJunkItemIDs() or {}
+		if #itemIDs == 0 then
+			self:Notify(self.L.JUNK_PROTECTION_EMPTY)
+			return
+		end
+		local labels = {}
+		for _, itemID in ipairs(itemIDs) do
+			table.insert(labels, "#" .. tostring(itemID))
+		end
+		self:Notify(string.format(self.L.JUNK_PROTECTION_LIST, table.concat(labels, ", ")))
 		return
 	end
 

@@ -5,6 +5,10 @@ HTF.Stats = Stats
 
 Stats.MIN_FONT_SIZE = 10
 Stats.MAX_FONT_SIZE = 24
+Stats.DURABILITY_WARNING_THRESHOLD = 40
+Stats.DURABILITY_CRITICAL_THRESHOLD = 20
+Stats.BAG_WARNING_THRESHOLD = 5
+Stats.BAG_CRITICAL_THRESHOLD = 2
 Stats.STAT_DEFINITIONS = {
 	{ key = "strength", primaryIndex = 1, fallbackKey = "STAT_STRENGTH" },
 	{ key = "agility", primaryIndex = 2, fallbackKey = "STAT_AGILITY" },
@@ -22,8 +26,23 @@ Stats.STAT_DEFINITIONS = {
 	{ key = "parry", globalLabel = "PARRY", fallbackKey = "STAT_PARRY" },
 }
 
-local definitionByKey = {}
+Stats.ADVENTURE_DEFINITIONS = {
+	{ key = "durability", fallbackKey = "HUD_DURABILITY" },
+	{ key = "bagSpace", fallbackKey = "HUD_BAG_SPACE" },
+	{ key = "money", fallbackKey = "HUD_MONEY" },
+	{ key = "latency", fallbackKey = "HUD_LATENCY" },
+}
+
+Stats.DISPLAY_DEFINITIONS = {}
 for _, definition in ipairs(Stats.STAT_DEFINITIONS) do
+	table.insert(Stats.DISPLAY_DEFINITIONS, definition)
+end
+for _, definition in ipairs(Stats.ADVENTURE_DEFINITIONS) do
+	table.insert(Stats.DISPLAY_DEFINITIONS, definition)
+end
+
+local definitionByKey = {}
+for _, definition in ipairs(Stats.DISPLAY_DEFINITIONS) do
 	definitionByKey[definition.key] = definition
 end
 
@@ -45,6 +64,11 @@ local OVERLAY_BACKDROP = {
 	edgeSize = 1,
 }
 
+local ALERT_COLORS = {
+	warning = { 0.96, 0.72, 0.28 },
+	critical = { 1.00, 0.34, 0.34 },
+}
+
 local function clamp(value, minimum, maximum)
 	return math.max(minimum, math.min(maximum, value))
 end
@@ -59,6 +83,14 @@ end
 
 local function percentText(value)
 	return string.format("%.2f%%", value)
+end
+
+local function integerPercentText(value)
+	return string.format("%d%%", math.floor(value + 0.5))
+end
+
+local function millisecondsText(value)
+	return string.format("%d ms", math.floor(value + 0.5))
 end
 
 local function copyColor(color)
@@ -111,7 +143,7 @@ function Stats:NormalizeSettings()
 	if type(db.statsColors) ~= "table" then
 		db.statsColors = {}
 	end
-	for _, definition in ipairs(self.STAT_DEFINITIONS) do
+	for _, definition in ipairs(self.DISPLAY_DEFINITIONS) do
 		local key = definition.key
 		if type(db.statsVisibility[key]) ~= "boolean" then
 			db.statsVisibility[key] = HTF.defaults.statsVisibility[key]
@@ -175,6 +207,10 @@ function Stats:Initialize()
 	self.eventFrame:RegisterEvent("MASTERY_UPDATE")
 	self.eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
 	self.eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+	self.eventFrame:RegisterEvent("UPDATE_INVENTORY_DURABILITY")
+	self.eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
+	self.eventFrame:RegisterEvent("PLAYER_MONEY")
+	self.eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 	self.eventFrame:SetScript("OnEvent", function(_, event, unit)
 		self:OnEvent(event, unit)
 	end)
@@ -214,7 +250,7 @@ function Stats:CreateOverlay()
 	overlay.status:SetShadowOffset(2, -2)
 
 	overlay.rows = {}
-	for _, definition in ipairs(self.STAT_DEFINITIONS) do
+	for _, definition in ipairs(self.DISPLAY_DEFINITIONS) do
 		local row = overlay:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 		row:SetJustifyH("LEFT")
 		row:SetShadowColor(0, 0, 0, 1)
@@ -265,7 +301,7 @@ function Stats:LayoutOverlay()
 	local yOffset = locked and -4 or -27
 	local visibleCount = 0
 
-	for _, definition in ipairs(self.STAT_DEFINITIONS) do
+	for _, definition in ipairs(self.DISPLAY_DEFINITIONS) do
 		local row = self.overlay.rows[definition.key]
 		row:ClearAllPoints()
 		if self:IsStatVisible(definition.key) then
@@ -315,7 +351,7 @@ function Stats:ApplyOverlaySettings()
 		self.overlay.title:Show()
 	end
 
-	for _, definition in ipairs(self.STAT_DEFINITIONS) do
+	for _, definition in ipairs(self.DISPLAY_DEFINITIONS) do
 		local row = self.overlay.rows[definition.key]
 		applyHighContrastFont(row, fontSize)
 		local r, g, b = self:GetStatColor(definition.key)
@@ -375,14 +411,18 @@ function Stats:RequestRefresh()
 	end
 end
 
-function Stats:AddValue(snapshot, key, value, formatter)
+function Stats:AddValue(snapshot, key, value, formatter, color)
 	if not HTF:IsSafeNumber(value) then
 		snapshot[key] = { text = HTF.L.STAT_RESTRICTED, restricted = true }
 		return true
 	end
 
-	snapshot[key] = { text = formatter(value), restricted = false }
+	snapshot[key] = { text = formatter(value), restricted = false, color = color }
 	return false
+end
+
+function Stats:AddUnavailableValue(snapshot, key)
+	snapshot[key] = { text = HTF.L.STAT_UNAVAILABLE, restricted = false }
 end
 
 function Stats:GetDisplayedCritChance()
@@ -438,6 +478,114 @@ function Stats:GetVersatility()
 		return nil
 	end
 	return ratingBonus + effectBonus
+end
+
+function Stats:GetDurabilityPercent()
+	if type(GetInventoryItemDurability) ~= "function" then
+		return nil
+	end
+
+	local lastSlot = HTF:IsSafeNumber(INVSLOT_LAST_EQUIPPED) and INVSLOT_LAST_EQUIPPED or 19
+	local currentTotal = 0
+	local maximumTotal = 0
+	for slot = 1, lastSlot do
+		local current, maximum = GetInventoryItemDurability(slot)
+		if HTF:IsSecretValue(current) then
+			return current
+		end
+		if HTF:IsSecretValue(maximum) then
+			return maximum
+		end
+		if HTF:IsSafeNumber(current) and HTF:IsSafeNumber(maximum) and maximum > 0 then
+			currentTotal = currentTotal + current
+			maximumTotal = maximumTotal + maximum
+		end
+	end
+
+	if maximumTotal <= 0 then
+		return nil
+	end
+	return currentTotal / maximumTotal * 100
+end
+
+function Stats:GetBagSpace()
+	if type(C_Container) ~= "table"
+		or type(C_Container.GetContainerNumFreeSlots) ~= "function"
+		or type(C_Container.GetContainerNumSlots) ~= "function" then
+		return nil, nil
+	end
+
+	local firstBag = HTF:IsSafeNumber(BACKPACK_CONTAINER) and BACKPACK_CONTAINER or 0
+	local lastBag = HTF:IsSafeNumber(NUM_BAG_SLOTS) and NUM_BAG_SLOTS or 4
+	local freeTotal = 0
+	local slotTotal = 0
+	for bag = firstBag, lastBag do
+		local freeSlots = C_Container.GetContainerNumFreeSlots(bag)
+		local slots = C_Container.GetContainerNumSlots(bag)
+		if HTF:IsSecretValue(freeSlots) then
+			return freeSlots, nil
+		end
+		if HTF:IsSecretValue(slots) then
+			return nil, slots
+		end
+		if not HTF:IsSafeNumber(freeSlots) or not HTF:IsSafeNumber(slots) then
+			return nil, nil
+		end
+		freeTotal = freeTotal + freeSlots
+		slotTotal = slotTotal + slots
+	end
+
+	if slotTotal <= 0 then
+		return nil, nil
+	end
+	return freeTotal, slotTotal
+end
+
+function Stats:GetLatency()
+	if type(GetNetStats) ~= "function" then
+		return nil
+	end
+
+	local _, _, homeLatency, worldLatency = GetNetStats()
+	if HTF:IsSecretValue(worldLatency) then
+		return worldLatency
+	end
+	if HTF:IsSafeNumber(worldLatency) then
+		return worldLatency
+	end
+	if HTF:IsSecretValue(homeLatency) then
+		return homeLatency
+	end
+	if HTF:IsSafeNumber(homeLatency) then
+		return homeLatency
+	end
+	return nil
+end
+
+function Stats:GetDurabilityAlertColor(value)
+	if not HTF:IsSafeNumber(value) then
+		return nil
+	end
+	if value <= self.DURABILITY_CRITICAL_THRESHOLD then
+		return ALERT_COLORS.critical
+	end
+	if value <= self.DURABILITY_WARNING_THRESHOLD then
+		return ALERT_COLORS.warning
+	end
+	return nil
+end
+
+function Stats:GetBagSpaceAlertColor(freeSlots)
+	if not HTF:IsSafeNumber(freeSlots) then
+		return nil
+	end
+	if freeSlots <= self.BAG_CRITICAL_THRESHOLD then
+		return ALERT_COLORS.critical
+	end
+	if freeSlots <= self.BAG_WARNING_THRESHOLD then
+		return ALERT_COLORS.warning
+	end
+	return nil
 end
 
 function Stats:BuildSnapshot()
@@ -501,6 +649,52 @@ function Stats:BuildSnapshot()
 		end
 	end
 
+	for _, definition in ipairs(self.ADVENTURE_DEFINITIONS) do
+		local key = definition.key
+		if self:IsStatVisible(key) then
+			if key == "durability" then
+				local value = self:GetDurabilityPercent()
+				if value == nil then
+					self:AddUnavailableValue(snapshot, key)
+				elseif self:AddValue(snapshot, key, value, integerPercentText, self:GetDurabilityAlertColor(value)) then
+					hasRestrictedValue = true
+				end
+			elseif key == "bagSpace" then
+				local freeSlots, totalSlots = self:GetBagSpace()
+				if HTF:IsSafeNumber(freeSlots) and HTF:IsSafeNumber(totalSlots) then
+					snapshot[key] = {
+						text = string.format("%d/%d", math.floor(freeSlots), math.floor(totalSlots)),
+						restricted = false,
+						color = self:GetBagSpaceAlertColor(freeSlots),
+					}
+				else
+					local restrictedValue = HTF:IsSecretValue(freeSlots) and freeSlots or (HTF:IsSecretValue(totalSlots) and totalSlots or nil)
+					if restrictedValue == nil then
+						self:AddUnavailableValue(snapshot, key)
+					elseif self:AddValue(snapshot, key, restrictedValue, integerText) then
+						hasRestrictedValue = true
+					end
+				end
+			elseif key == "money" then
+				local value = type(GetMoney) == "function" and GetMoney() or nil
+				if value == nil then
+					self:AddUnavailableValue(snapshot, key)
+				elseif self:AddValue(snapshot, key, value, function(amount)
+					return HTF:FormatMoney(amount)
+				end) then
+					hasRestrictedValue = true
+				end
+			elseif key == "latency" then
+				local value = self:GetLatency()
+				if value == nil then
+					self:AddUnavailableValue(snapshot, key)
+				elseif self:AddValue(snapshot, key, value, millisecondsText) then
+					hasRestrictedValue = true
+				end
+			end
+		end
+	end
+
 	return snapshot, hasRestrictedValue
 end
 
@@ -509,10 +703,18 @@ function Stats:RenderSnapshot(snapshot, hasRestrictedValue)
 		return
 	end
 
-	for _, definition in ipairs(self.STAT_DEFINITIONS) do
+	for _, definition in ipairs(self.DISPLAY_DEFINITIONS) do
 		local value = snapshot[definition.key]
 		if value then
-			self.overlay.rows[definition.key]:SetText(string.format("%s: %s", self:GetStatLabel(definition.key), value.text or HTF.L.STAT_UNAVAILABLE))
+			local row = self.overlay.rows[definition.key]
+			row:SetText(string.format("%s: %s", self:GetStatLabel(definition.key), value.text or HTF.L.STAT_UNAVAILABLE))
+			local r, g, b = self:GetStatColor(definition.key)
+			if type(value.color) == "table" then
+				r = value.color[1] or r
+				g = value.color[2] or g
+				b = value.color[3] or b
+			end
+			row:SetTextColor(r, g, b, 1)
 		end
 	end
 
@@ -617,7 +819,7 @@ end
 
 function Stats:ResetColors()
 	HTF.db.statsColors = {}
-	for _, definition in ipairs(self.STAT_DEFINITIONS) do
+	for _, definition in ipairs(self.DISPLAY_DEFINITIONS) do
 		HTF.db.statsColors[definition.key] = copyColor(HTF.defaults.statsColors[definition.key])
 	end
 	self:ApplyOverlaySettings()
@@ -631,6 +833,16 @@ end
 function Stats:GetVisibleStatCount()
 	local count = 0
 	for _, definition in ipairs(self.STAT_DEFINITIONS) do
+		if self:IsStatVisible(definition.key) then
+			count = count + 1
+		end
+	end
+	return count
+end
+
+function Stats:GetVisibleAdventureStatusCount()
+	local count = 0
+	for _, definition in ipairs(self.ADVENTURE_DEFINITIONS) do
 		if self:IsStatVisible(definition.key) then
 			count = count + 1
 		end

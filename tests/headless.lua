@@ -364,6 +364,7 @@ end
 local repairCalls = 0
 local repairArguments = {}
 local junkSellCalls = 0
+local individualJunkSellCalls = 0
 local personalMoney = 999999
 local secretPersonalMoney = false
 local secretMerchantPermission = false
@@ -427,14 +428,104 @@ function RepairAllItems(useGuild)
 	table.insert(repairArguments, useGuild == true and true or "personal")
 end
 
+BACKPACK_CONTAINER = 0
+NUM_BAG_SLOTS = 4
+INVSLOT_LAST_EQUIPPED = 19
+
+local bagSlots = {
+	[0] = 16,
+	[1] = 16,
+	[2] = 16,
+	[3] = 16,
+	[4] = 16,
+}
+local bagFreeSlots = {
+	[0] = 2,
+	[1] = 0,
+	[2] = 0,
+	[3] = 0,
+	[4] = 0,
+}
+local containerItems = {
+	[0] = {
+		[16] = { itemID = 1001, stackCount = 2, quality = 0, hyperlink = "|cff9d9d9d|Hitem:1001:::::::::|h[Discarded Saber]|h|r", hasNoValue = false },
+		[15] = { itemID = 1002, stackCount = 1, quality = 0, hyperlink = "|cff9d9d9d|Hitem:1002:::::::::|h[Broken Compass]|h|r", hasNoValue = false },
+		[14] = { itemID = 2001, stackCount = 1, quality = 1, hyperlink = "|cffffffff|Hitem:2001:::::::::|h[Traveler's Bread]|h|r", hasNoValue = false },
+	},
+}
+local itemInfo = {
+	[1001] = { name = "Discarded Saber", quality = 0, sellPrice = 125 },
+	[1002] = { name = "Broken Compass", quality = 0, sellPrice = 540 },
+	[2001] = { name = "Traveler's Bread", quality = 1, sellPrice = 50 },
+}
+local secretDurability = false
+local secretBagSpace = false
+local secretLatency = false
+
+C_Container = {
+	GetContainerNumSlots = function(bag)
+		return bagSlots[bag] or 0
+	end,
+	GetContainerNumFreeSlots = function(bag)
+		if secretBagSpace then
+			return SECRET
+		end
+		return bagFreeSlots[bag] or 0
+	end,
+	GetContainerItemInfo = function(bag, slot)
+		return containerItems[bag] and containerItems[bag][slot] or nil
+	end,
+	UseContainerItem = function(bag, slot)
+		local item = containerItems[bag] and containerItems[bag][slot]
+		if item then
+			individualJunkSellCalls = individualJunkSellCalls + 1
+			personalMoney = personalMoney + ((itemInfo[item.itemID] and itemInfo[item.itemID].sellPrice or 0) * item.stackCount)
+		end
+	end,
+}
+
+C_Item = {
+	GetItemInfo = function(itemID)
+		local item = itemInfo[itemID]
+		if not item then
+			return nil
+		end
+		return item.name, "|Hitem:" .. itemID .. "|h[" .. item.name .. "]|h", item.quality, 1, 1, "Miscellaneous", "Junk", 20, "", 0, item.sellPrice, 0, 0, 0, 0, false, false
+	end,
+}
+
 C_MerchantFrame = {
 	GetNumJunkItems = function()
 		return 3
 	end,
 	SellAllJunkItems = function()
 		junkSellCalls = junkSellCalls + 1
+		personalMoney = personalMoney + 790
 	end,
 }
+
+local inventoryDurability = {
+	[1] = { current = 35, maximum = 100 },
+}
+local worldLatency = 42
+
+function GetInventoryItemDurability(slot)
+	if secretDurability then
+		return SECRET, SECRET
+	end
+	local durability = inventoryDurability[slot]
+	if durability then
+		return durability.current, durability.maximum
+	end
+	return nil, nil
+end
+
+function GetNetStats()
+	if secretLatency then
+		return 0, 0, 30, SECRET
+	end
+	return 0, 0, 30, worldLatency
+end
 
 local secretIdentity = false
 local secretCrit = false
@@ -625,7 +716,7 @@ for _, path in ipairs({
 end
 
 fireEvent("ADDON_LOADED", "HappyTreeFriends")
-equal(HTF.VERSION, "0.4.0", "addon version")
+equal(HTF.VERSION, "0.5.0", "addon version")
 equal(HTF.LOCALE, testLocale, "addon selects the active supported locale")
 equal(HTF.CLIENT_LOCALE, testLocale, "addon records the client locale")
 equal(HTF.L.SETTINGS, testLocale == "zhCN" and "设置" or "Settings", "selected locale exposes translated settings text")
@@ -641,11 +732,18 @@ for _, definition in ipairs(HTF.Stats.STAT_DEFINITIONS) do
 	check(HTF.LOCALES.zhCN[definition.fallbackKey] ~= nil, "zhCN stat fallback exists: " .. definition.key)
 end
 local formatCases = {
-	VERSION_LABEL = { "0.4.0" },
+	VERSION_LABEL = { "0.5.0" },
 	REPAIRED_PERSONAL = { "1g" },
 	REPAIRED_GUILD = { "1g" },
 	REPAIRED_MIXED = { "1g" },
 	SOLD_JUNK = { 3 },
+	LEDGER_REPAIR_TOTAL = { "1g", "1g", "1g" },
+	LEDGER_JUNK_TOTAL = { 3, "1g" },
+	LEDGER_SKIPPED_ITEM = { "item", 1 },
+	LEDGER_SKIPPED_MORE = { 2 },
+	JUNK_PROTECTION_ADDED = { 1001 },
+	JUNK_PROTECTION_REMOVED = { 1001 },
+	JUNK_PROTECTION_LIST = { "#1001" },
 	DEBUG_REPAIR_COMPLETED = { "1g", "personal" },
 	DEBUG_JUNK_SOLD = { 3 },
 	DEBUG_STATS_POSITION_SAVED = { "TOP", "TOP", 1, -1 },
@@ -663,11 +761,13 @@ check(HTF.debugLog == HappyTreeFriendsDB.debugLog, "runtime log must share the S
 equal(HTF:GetSetting("autoRepair"), false, "auto repair defaults off")
 equal(HTF:GetSetting("repairFromGuild"), false, "guild repair defaults off")
 equal(HTF:GetSetting("autoSellJunk"), false, "auto sell defaults off")
+check(type(HTF:GetSetting("protectedJunkItems")) == "table", "protected junk item IDs default to an empty table")
 equal(HTF:GetSetting("friendlyNamesOnly"), false, "friendly names-only mode defaults off")
 equal(HTF.db.friendlyNamesOnlySnapshot, nil, "friendly names-only mode has no default snapshot")
 equal(HTF:GetSetting("statsLocked"), true, "stats overlay defaults locked")
 equal(HTF:GetSetting("statsFontSize"), 15, "stats overlay default font size")
 equal(HTF.Stats:GetVisibleStatCount(), 14, "all stats default visible")
+equal(HTF.Stats:GetVisibleAdventureStatusCount(), 0, "adventure status defaults hidden")
 
 check(HTF.Stats.overlay ~= nil, "stats overlay is created during addon initialization")
 equal(HTF.Stats.overlay:GetName(), "HappyTreeFriendsStatsOverlay", "stats overlay has a stable frame name")
@@ -686,6 +786,8 @@ equal(HTF.Stats.overlay.rows.strength.shadowOffset[1], 2, "overlay stat shadow h
 equal(HTF.Stats.overlay.rows.strength.shadowOffset[2], -2, "overlay stat shadow has a visible vertical offset")
 equal(HTF.Stats.overlay.status.fontFlags, "THICKOUTLINE", "overlay status text uses the same strong outline")
 check(HTF.Stats.overlay.rows.strength.textColor[1] ~= HTF.Stats.overlay.rows.agility.textColor[1], "default stat rows use distinct colors")
+check(HTF.Stats.overlay.rows.durability ~= nil, "overlay creates a durability row")
+check(not HTF.Stats.overlay.rows.durability:IsShown(), "adventure status rows default hidden")
 
 for _, frame in ipairs(frames) do
 	check(frame.scripts.OnUpdate == nil, "addon frames do not use OnUpdate polling")
@@ -864,7 +966,7 @@ local configuredStatRows = 0
 for _ in pairs(HTF.Options.statSettingRows) do
 	configuredStatRows = configuredStatRows + 1
 end
-equal(configuredStatRows, 14, "settings page exposes all stat visibility/color controls")
+equal(configuredStatRows, 18, "settings page exposes all stat and adventure-status controls")
 equal(HTF.Options.statsFontValue:GetText(), "15", "settings page displays the active font size")
 
 local leftToggle = HTF.Options.statsDisplayToggleRow
@@ -950,6 +1052,100 @@ HTF.Stats:SetStatVisible("strength", true)
 flushTimers()
 check(HTF.Stats.overlay.rows.strength:IsShown(), "per-stat visibility can restore a HUD row")
 equal(HTF.Stats:GetVisibleStatCount(), 14, "visible stat count restores after showing a row")
+
+check(HTF.Options.statSettingRows.durability ~= nil, "settings expose a durability toggle")
+check(HTF.Options.statSettingRows.bagSpace ~= nil, "settings expose a bag-space toggle")
+check(HTF.Options.statSettingRows.money ~= nil, "settings expose a money toggle")
+check(HTF.Options.statSettingRows.latency ~= nil, "settings expose a latency toggle")
+check(HTF.Stats.eventFrame.events.UPDATE_INVENTORY_DURABILITY, "HUD listens for durability changes")
+check(HTF.Stats.eventFrame.events.BAG_UPDATE_DELAYED, "HUD listens for settled bag changes")
+check(HTF.Stats.eventFrame.events.PLAYER_MONEY, "HUD listens for money changes")
+check(HTF.Stats.eventFrame.events.ZONE_CHANGED_NEW_AREA, "HUD refreshes latency after area changes")
+
+for _, key in ipairs({ "durability", "bagSpace", "money", "latency" }) do
+	HTF.Stats:SetStatVisible(key, true)
+end
+flushTimers()
+equal(HTF.Stats:GetVisibleAdventureStatusCount(), 4, "all selected adventure rows become visible")
+equal(HTF.Stats.overlay.rows.durability:GetText(), HTF.Stats:GetStatLabel("durability") .. ": 35%", "HUD shows average equipment durability")
+equal(HTF.Stats.overlay.rows.bagSpace:GetText(), HTF.Stats:GetStatLabel("bagSpace") .. ": 2/80", "HUD shows free and total bag slots")
+contains(HTF.Stats.overlay.rows.money:GetText(), HTF.Stats:GetStatLabel("money") .. ": ", "HUD shows current money")
+equal(HTF.Stats.overlay.rows.latency:GetText(), HTF.Stats:GetStatLabel("latency") .. ": 42 ms", "HUD shows world latency")
+equal(HTF.Stats.overlay.rows.durability.textColor[1], 0.96, "low durability uses the warning color")
+equal(HTF.Stats.overlay.rows.bagSpace.textColor[1], 1.00, "nearly full bags use the critical color")
+
+inventoryDurability[1].current = 10
+fireEvent("UPDATE_INVENTORY_DURABILITY")
+flushTimers()
+equal(HTF.Stats.overlay.rows.durability:GetText(), HTF.Stats:GetStatLabel("durability") .. ": 10%", "durability refreshes from its event")
+equal(HTF.Stats.overlay.rows.durability.textColor[1], 1.00, "critical durability uses the critical color")
+
+bagFreeSlots[0] = 5
+fireEvent("BAG_UPDATE_DELAYED")
+flushTimers()
+equal(HTF.Stats.overlay.rows.bagSpace:GetText(), HTF.Stats:GetStatLabel("bagSpace") .. ": 5/80", "bag space refreshes from its event")
+equal(HTF.Stats.overlay.rows.bagSpace.textColor[1], 0.96, "low bag space uses the warning color")
+
+worldLatency = 77
+fireEvent("ZONE_CHANGED_NEW_AREA")
+flushTimers()
+equal(HTF.Stats.overlay.rows.latency:GetText(), HTF.Stats:GetStatLabel("latency") .. ": 77 ms", "latency refreshes from an area-change event")
+
+secretDurability = true
+local secretDurabilityOk, secretDurabilityError = pcall(function()
+	HTF.Stats:Refresh()
+end)
+check(secretDurabilityOk, "secret durability values must not be combined or formatted: " .. tostring(secretDurabilityError))
+contains(HTF.Stats.overlay.rows.durability:GetText(), HTF.L.STAT_RESTRICTED, "secret durability is marked restricted")
+secretDurability = false
+
+secretBagSpace = true
+local secretBagSpaceOk, secretBagSpaceError = pcall(function()
+	HTF.Stats:Refresh()
+end)
+check(secretBagSpaceOk, "secret bag-space values must not be combined or formatted: " .. tostring(secretBagSpaceError))
+contains(HTF.Stats.overlay.rows.bagSpace:GetText(), HTF.L.STAT_RESTRICTED, "secret bag space is marked restricted")
+secretBagSpace = false
+
+secretLatency = true
+local secretLatencyOk, secretLatencyError = pcall(function()
+	HTF.Stats:Refresh()
+end)
+check(secretLatencyOk, "secret latency values must not be formatted: " .. tostring(secretLatencyError))
+contains(HTF.Stats.overlay.rows.latency:GetText(), HTF.L.STAT_RESTRICTED, "secret latency is marked restricted")
+secretLatency = false
+
+inventoryDurability[1] = nil
+HTF.Stats:Refresh()
+equal(HTF.Stats.overlay.rows.durability:GetText(), HTF.Stats:GetStatLabel("durability") .. ": " .. HTF.L.STAT_UNAVAILABLE, "missing durability data is unavailable rather than restricted")
+inventoryDurability[1] = { current = 35, maximum = 100 }
+
+local getContainerNumFreeSlots = C_Container.GetContainerNumFreeSlots
+C_Container.GetContainerNumFreeSlots = nil
+HTF.Stats:Refresh()
+equal(HTF.Stats.overlay.rows.bagSpace:GetText(), HTF.Stats:GetStatLabel("bagSpace") .. ": " .. HTF.L.STAT_UNAVAILABLE, "missing bag API is unavailable rather than restricted")
+C_Container.GetContainerNumFreeSlots = getContainerNumFreeSlots
+
+local getNetStats = GetNetStats
+GetNetStats = nil
+HTF.Stats:Refresh()
+equal(HTF.Stats.overlay.rows.latency:GetText(), HTF.Stats:GetStatLabel("latency") .. ": " .. HTF.L.STAT_UNAVAILABLE, "missing latency API is unavailable rather than restricted")
+GetNetStats = getNetStats
+
+local getMoney = GetMoney
+GetMoney = nil
+HTF.Stats:Refresh()
+equal(HTF.Stats.overlay.rows.money:GetText(), HTF.Stats:GetStatLabel("money") .. ": " .. HTF.L.STAT_UNAVAILABLE, "missing money API is unavailable rather than restricted")
+GetMoney = getMoney
+
+inventoryDurability[1].current = 35
+bagFreeSlots[0] = 2
+worldLatency = 42
+for _, key in ipairs({ "durability", "bagSpace", "money", "latency" }) do
+	HTF.Stats:SetStatVisible(key, false)
+end
+flushTimers()
+equal(HTF.Stats:GetVisibleAdventureStatusCount(), 0, "adventure rows can be hidden again")
 
 HTF.Stats:SetFontSize(19)
 equal(HTF:GetSetting("statsFontSize"), 19, "font size persists in settings")
@@ -1083,9 +1279,59 @@ check(secretGuildPermissionOk, "secret guild permission must not be used as a br
 equal(secretGuildPermissionResult.source, "personal", "secret guild permission falls back to personal repair")
 secretGuildPermission = false
 
+HTF.Merchant:ResetSessionLedger()
+HTF:SetSetting("repairFromGuild", false)
+personalMoney = 999999
+local ledgerRepair = HTF.Merchant:TryAutoRepair()
+check(type(ledgerRepair) == "table", "a completed repair returns ledger data")
+local ledgerSale = HTF.Merchant:TryAutoSellJunk()
+check(type(ledgerSale) == "table", "a completed junk sale returns ledger data")
+equal(ledgerSale.count, 3, "ledger counts the stack quantity of sold junk")
+equal(ledgerSale.value, 790, "ledger sums known gray-item vendor value")
+check(ledgerSale.valueKnown, "cached item data produces a known junk-sale value")
+local sessionLedger = HTF.Merchant:GetSessionLedger()
+equal(sessionLedger.repairTotal, 12345, "session ledger records repair cost")
+equal(sessionLedger.repairPersonal, 12345, "session ledger records personal repair spending")
+equal(sessionLedger.repairGuild, 0, "session ledger records zero guild spending for personal repair")
+equal(sessionLedger.junkItemsSold, 3, "session ledger records sold gray-item quantity")
+equal(sessionLedger.junkIncome, 790, "session ledger records gray-item earnings")
+contains(HTF.Merchant:GetSessionLedgerText(), HTF.L.LEDGER_SKIPPED_EMPTY, "new ledger reports no protected items skipped")
+
+HTF:HandleSlashCommand(HTF.L.COMMAND_PROTECT_ALIAS .. " |Hitem:1001:::::::::|h[Discarded Saber]|h")
+check(HTF.Merchant:IsJunkItemProtected(1001), "slash protection stores a gray-item ID")
+local nativeSalesBeforeProtection = junkSellCalls
+local individualSalesBeforeProtection = individualJunkSellCalls
+local protectedSale = HTF.Merchant:TryAutoSellJunk()
+equal(protectedSale.count, 1, "protected gray items are excluded from the sale count")
+equal(protectedSale.value, 540, "protected gray items are excluded from the sale value")
+equal(junkSellCalls, nativeSalesBeforeProtection, "protected-item mode avoids native sell-all")
+equal(individualJunkSellCalls, individualSalesBeforeProtection + 1, "protected-item mode sells only unprotected gray items")
+equal(sessionLedger.junkItemsSold, 4, "session ledger accumulates protected-mode sales")
+equal(sessionLedger.junkIncome, 1330, "session ledger accumulates protected-mode earnings")
+equal(sessionLedger.skippedItems["1001"].count, 2, "session ledger records skipped protected stack quantity")
+contains(HTF.Merchant:GetSessionLedgerText(), "Discarded Saber", "session ledger identifies skipped protected items")
+HTF:HandleSlashCommand(HTF.L.COMMAND_PROTECTED_ALIAS)
+contains(chatMessages[#chatMessages], "#1001", "localized slash command lists protected gray-item IDs")
+
+HTF.Options:Open("merchant")
+contains(HTF.Options.merchantLedgerText:GetText(), "Discarded Saber", "merchant page displays the live session ledger")
+HTF:HandleSlashCommand(HTF.L.COMMAND_UNPROTECT_ALIAS .. " 1001")
+check(not HTF.Merchant:IsJunkItemProtected(1001), "slash unprotect removes a protected gray-item ID")
+
+HTF:HandleSlashCommand(HTF.L.COMMAND_PROTECT_ALIAS .. " 9999")
+local nativeSalesBeforeAbsentProtection = junkSellCalls
+local individualSalesBeforeAbsentProtection = individualJunkSellCalls
+local absentProtectionSale = HTF.Merchant:TryAutoSellJunk()
+equal(absentProtectionSale.count, 3, "unrelated protections still allow other gray items to sell")
+equal(junkSellCalls, nativeSalesBeforeAbsentProtection, "any saved protection keeps sell-all disabled for safety")
+equal(individualJunkSellCalls, individualSalesBeforeAbsentProtection + 2, "unrelated protections use per-item sale handling")
+HTF:HandleSlashCommand(HTF.L.COMMAND_UNPROTECT_ALIAS .. " 9999")
+
 repairCalls = 0
 repairArguments = {}
 junkSellCalls = 0
+individualJunkSellCalls = 0
+HTF.Merchant:ResetSessionLedger()
 
 HTF:SetSetting("repairFromGuild", false)
 personalMoney = 999999
@@ -1201,6 +1447,10 @@ contains(report, "repairFromGuild: false", "diagnostic report includes guild rep
 contains(report, "friendlyNamesOnly: false", "diagnostic report includes friendly names-only setting")
 contains(report, "statsFontSize: 15", "diagnostic report includes HUD font size")
 contains(report, "visibleStats: 14/14", "diagnostic report includes visible HUD stat count")
+contains(report, "visibleAdventureStatus: 0/4", "diagnostic report includes visible adventure-status count")
+contains(report, "Protected junk item IDs: 0", "diagnostic report excludes protected item details while reporting their count")
+contains(report, "sessionRepairs:", "diagnostic report includes session repair total")
+contains(report, "sessionJunkIncome:", "diagnostic report includes session junk income")
 contains(report, "statsPosition:", "diagnostic report includes HUD position")
 contains(report, "Persisted debug log (80/80)", "diagnostic report log count")
 contains(report, "no account, character, or realm identifiers", "diagnostic report privacy note")

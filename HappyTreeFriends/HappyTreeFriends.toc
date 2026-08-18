@@ -3,7 +3,7 @@
 ## Notes: A refined collection of lightweight quality-of-life tools for WoW Retail.
 ## Notes-zhCN: 轻量、精致的魔兽世界实用小工具合集。
 ## Author: Happy Tree Friends
-## Version: 0.4.0
+## Version: 0.5.0
 ## SavedVariables: HappyTreeFriendsDB
 
 Locales.lua

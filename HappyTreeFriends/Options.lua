@@ -310,21 +310,40 @@ function Options:CreateMerchantPage(page)
 	self:AddPageHeader(page, HTF.L.MERCHANT, HTF.L.MERCHANT_PAGE_HELP)
 
 	self:CreateToggleRow(page, -84, "autoRepair", HTF.L.AUTO_REPAIR, HTF.L.AUTO_REPAIR_DESC)
-	self:CreateToggleRow(page, -156, "repairFromGuild", HTF.L.REPAIR_FROM_GUILD, HTF.L.REPAIR_FROM_GUILD_DESC)
-	self:CreateToggleRow(page, -228, "autoSellJunk", HTF.L.AUTO_SELL_JUNK, HTF.L.AUTO_SELL_JUNK_DESC)
-	self:CreateToggleRow(page, -300, "showNotifications", HTF.L.SHOW_NOTIFICATIONS, HTF.L.SHOW_NOTIFICATIONS_DESC)
+	self:CreateCompactToggleRow(page, "left", -164, "repairFromGuild", HTF.L.REPAIR_FROM_GUILD, HTF.L.REPAIR_FROM_GUILD_DESC)
+	self:CreateCompactToggleRow(page, "right", -164, "autoSellJunk", HTF.L.AUTO_SELL_JUNK, HTF.L.AUTO_SELL_JUNK_DESC)
+	self:CreateCompactToggleRow(page, "left", -230, "showNotifications", HTF.L.SHOW_NOTIFICATIONS, HTF.L.SHOW_NOTIFICATIONS_DESC)
 
 	local note = CreateFrame("Frame", nil, page, "BackdropTemplate")
-	note:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -386)
-	note:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, -386)
-	note:SetHeight(88)
+	note:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -298)
+	note:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, -298)
+	note:SetHeight(72)
 	applyBackdrop(note, COLORS.sidebar, COLORS.border)
 
-	local noteText = createText(note, "GameFontHighlightSmall", HTF.L.AUTO_ACTIONS_NOTICE, 11, COLORS.muted)
+	local noteText = createText(note, "GameFontHighlightSmall", HTF.L.JUNK_PROTECTION_HELP, 11, COLORS.muted)
 	noteText:SetPoint("TOPLEFT", 14, -13)
 	noteText:SetPoint("TOPRIGHT", -14, -13)
 	noteText:SetJustifyH("LEFT")
 	noteText:SetJustifyV("TOP")
+
+	local ledger = CreateFrame("Frame", nil, page, "BackdropTemplate")
+	ledger:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -384)
+	ledger:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, -384)
+	ledger:SetHeight(170)
+	applyBackdrop(ledger, COLORS.panel, COLORS.border)
+
+	local ledgerTitle = createText(ledger, "GameFontNormal", HTF.L.SESSION_LEDGER, 13, COLORS.text)
+	ledgerTitle:SetPoint("TOPLEFT", 14, -12)
+	local ledgerHint = createText(ledger, "GameFontHighlightSmall", HTF.L.SESSION_LEDGER_HELP, 10, COLORS.muted)
+	ledgerHint:SetPoint("LEFT", ledgerTitle, "RIGHT", 10, 0)
+	ledgerHint:SetPoint("RIGHT", ledger, "RIGHT", -14, 0)
+	ledgerHint:SetJustifyH("RIGHT")
+
+	self.merchantLedgerText = createText(ledger, "GameFontHighlightSmall", "", 11, COLORS.muted)
+	self.merchantLedgerText:SetPoint("TOPLEFT", ledgerTitle, "BOTTOMLEFT", 0, -10)
+	self.merchantLedgerText:SetPoint("TOPRIGHT", ledger, "TOPRIGHT", -14, -39)
+	self.merchantLedgerText:SetJustifyH("LEFT")
+	self.merchantLedgerText:SetJustifyV("TOP")
 end
 
 function Options:CreateStatSettingRow(parent, column, yOffset, key, label)
@@ -440,6 +459,18 @@ function Options:CreateStatsPage(page)
 		local column = index <= 7 and "left" or "right"
 		local rowIndex = column == "left" and index or index - 7
 		self:CreateStatSettingRow(page, column, -242 - (rowIndex - 1) * 34, definition.key, HTF.Stats:GetStatLabel(definition.key))
+	end
+
+	local adventureTitle = createText(page, "GameFontNormal", HTF.L.ADVENTURE_STATUS_ITEMS, 12, COLORS.text)
+	adventureTitle:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -486)
+	local adventureHelp = createText(page, "GameFontHighlightSmall", HTF.L.ADVENTURE_STATUS_HELP, 10, COLORS.muted)
+	adventureHelp:SetPoint("RIGHT", page, "RIGHT", -20, -486)
+	adventureHelp:SetJustifyH("RIGHT")
+
+	for index, definition in ipairs(HTF.Stats.ADVENTURE_DEFINITIONS) do
+		local column = index <= 2 and "left" or "right"
+		local rowIndex = column == "left" and index or index - 2
+		self:CreateStatSettingRow(page, column, -512 - (rowIndex - 1) * 34, definition.key, HTF.Stats:GetStatLabel(definition.key))
 	end
 end
 
@@ -631,7 +662,7 @@ function Options:CreatePanel()
 
 	local panel = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
 	panel.name = HTF.L.ADDON_NAME
-	panel:SetSize(840, 520)
+	panel:SetSize(840, 600)
 	applyBackdrop(panel, COLORS.background, COLORS.border)
 	self.panel = panel
 
@@ -749,6 +780,7 @@ function Options:SelectPage(key)
 
 	self:RefreshOverview()
 	self:RefreshStatSettings()
+	self:RefreshMerchantLedger()
 	self:RefreshDebugLog()
 end
 
@@ -788,6 +820,13 @@ function Options:RefreshDebugLog()
 	self:SetDebugText(table.concat(lines, "\n"))
 end
 
+function Options:RefreshMerchantLedger()
+	if not self.merchantLedgerText or not HTF.Merchant or not HTF.Merchant.GetSessionLedgerText then
+		return
+	end
+	self.merchantLedgerText:SetText(HTF.Merchant:GetSessionLedgerText())
+end
+
 function Options:Refresh()
 	if not self.panel then
 		return
@@ -798,6 +837,7 @@ function Options:Refresh()
 	end
 	self:RefreshOverview()
 	self:RefreshStatSettings()
+	self:RefreshMerchantLedger()
 	self:RefreshDebugLog()
 end
 
