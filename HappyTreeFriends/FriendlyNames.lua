@@ -6,8 +6,8 @@ HTF.FriendlyNames = FriendlyNames
 local FRIENDLY_PLAYER_NAMES_CVAR = "UnitNameFriendlyPlayerName"
 local FRIENDLY_PLAYER_NAMEPLATES_CVAR = "nameplateShowFriendlyPlayers"
 local FRIENDLY_PLAYER_NAMES_ONLY_CVAR = "nameplateShowOnlyNameForFriendlyPlayerUnits"
-local FRIENDLY_PLAYER_CLASS_COLORS_CVAR = "nameplateShowFriendlyClassColor"
-local LEGACY_FRIENDLY_PLAYER_CLASS_COLORS_CVAR = "nameplateUseClassColorForFriendlyPlayerUnitNames"
+local FRIENDLY_PLAYER_CLASS_COLORS_CVAR = "nameplateUseClassColorForFriendlyPlayerUnitNames"
+local ERRONEOUS_FRIENDLY_HEALTH_CLASS_COLORS_CVAR = "nameplateShowFriendlyClassColor"
 
 local FONT_OBJECT_NAMES = {
 	"SystemFont_NamePlate",
@@ -640,12 +640,14 @@ function FriendlyNames:GetDiagnosticSummary()
 		local value, supported = self:GetCVarValue(cvarName)
 		values[cvarName] = supported and value or "<unavailable>"
 	end
+	local healthClassColors, healthClassColorsSupported = self:GetCVarValue(ERRONEOUS_FRIENDLY_HEALTH_CLASS_COLORS_CVAR)
 	return string.format(
-		"worldNames=%s, nameplates=%s, namesOnly=%s, classColors=%s, optionsHook=%s, mouseoverHook=%s, mouseoverHookCalls=%d",
+		"worldNames=%s, nameplates=%s, namesOnly=%s, nameClassColors=%s, healthClassColors=%s, optionsHook=%s, mouseoverHook=%s, mouseoverHookCalls=%d",
 		values[FRIENDLY_PLAYER_NAMES_CVAR],
 		values[FRIENDLY_PLAYER_NAMEPLATES_CVAR],
 		values[FRIENDLY_PLAYER_NAMES_ONLY_CVAR],
 		values[FRIENDLY_PLAYER_CLASS_COLORS_CVAR],
+		healthClassColorsSupported and healthClassColors or "<unavailable>",
 		tostring(self.nameplateOptionsHookInstalled == true),
 		tostring(self.nameplateMouseoverHookInstalled == true),
 		self.mouseoverHookCalls or 0
@@ -667,15 +669,29 @@ function FriendlyNames:GetSnapshot()
 		return nil
 	end
 
-	-- 12.1 replaced the friendly class-color CVar. Existing HTF snapshots
-	-- contain only the legacy key, which never changed the current nameplates.
+	-- Version 0.6.0 briefly mistook the health-bar class-color CVar for the
+	-- friendly-name CVar. Restore the value captured by that version first.
+	local erroneousHealthColorValue = snapshot[ERRONEOUS_FRIENDLY_HEALTH_CLASS_COLORS_CVAR]
+	if erroneousHealthColorValue ~= nil then
+		erroneousHealthColorValue = normalizeCVarValue(erroneousHealthColorValue)
+		if erroneousHealthColorValue == nil then
+			snapshot[ERRONEOUS_FRIENDLY_HEALTH_CLASS_COLORS_CVAR] = nil
+		else
+			local restored = self:SetCVarValue(ERRONEOUS_FRIENDLY_HEALTH_CLASS_COLORS_CVAR, erroneousHealthColorValue)
+			if restored then
+				snapshot[ERRONEOUS_FRIENDLY_HEALTH_CLASS_COLORS_CVAR] = nil
+			end
+		end
+	end
+
+	-- The erroneous migration removed the original name-color snapshot. Its
+	-- current value is the safest available restoration point for affected users.
 	if snapshot[FRIENDLY_PLAYER_CLASS_COLORS_CVAR] == nil then
 		local currentValue, supported = self:GetCVarValue(FRIENDLY_PLAYER_CLASS_COLORS_CVAR)
 		if supported then
 			snapshot[FRIENDLY_PLAYER_CLASS_COLORS_CVAR] = currentValue
 		end
 	end
-	snapshot[LEGACY_FRIENDLY_PLAYER_CLASS_COLORS_CVAR] = nil
 
 	for _, cvarName in ipairs(MANAGED_CVARS) do
 		if snapshot[cvarName] ~= nil then

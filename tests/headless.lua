@@ -372,13 +372,14 @@ end
 local friendlyPlayerNamesCVar = "UnitNameFriendlyPlayerName"
 local friendlyPlayerNameplatesCVar = "nameplateShowFriendlyPlayers"
 local friendlyPlayerNamesOnlyCVar = "nameplateShowOnlyNameForFriendlyPlayerUnits"
-local friendlyPlayerClassColorsCVar = "nameplateShowFriendlyClassColor"
-local legacyFriendlyPlayerClassColorsCVar = "nameplateUseClassColorForFriendlyPlayerUnitNames"
+local friendlyPlayerClassColorsCVar = "nameplateUseClassColorForFriendlyPlayerUnitNames"
+local friendlyHealthClassColorsCVar = "nameplateShowFriendlyClassColor"
 local cvarValues = {
 	[friendlyPlayerNamesCVar] = "0",
 	[friendlyPlayerNameplatesCVar] = "0",
 	[friendlyPlayerNamesOnlyCVar] = "0",
 	[friendlyPlayerClassColorsCVar] = "0",
+	[friendlyHealthClassColorsCVar] = "0",
 }
 local cvarSetFailures = {}
 local cvarSetCalls = {}
@@ -1050,15 +1051,18 @@ check(HTF.db.friendlyNamesOnlySnapshot == friendlyNamesSnapshot, "reapplying the
 
 HTF:SetSetting("friendlyNameClassColors", true)
 equal(cvarValues[friendlyPlayerClassColorsCVar], "1", "class-color setting uses the native friendly-name CVar")
+equal(cvarValues[friendlyHealthClassColorsCVar], "0", "friendly-name class colors do not alter friendly health-bar class colors")
 equal(friendlyNameClassColorsToggleRow.toggle.dot.points[1][1], "RIGHT", "class-color toggle refreshes after enabling")
 
 friendlyNamesSnapshot[friendlyPlayerClassColorsCVar] = nil
-friendlyNamesSnapshot[legacyFriendlyPlayerClassColorsCVar] = "0"
-cvarValues[friendlyPlayerClassColorsCVar] = "0"
+friendlyNamesSnapshot[friendlyHealthClassColorsCVar] = "0"
+cvarValues[friendlyHealthClassColorsCVar] = "1"
 HTF.FriendlyNames:Synchronize()
-equal(cvarValues[friendlyPlayerClassColorsCVar], "1", "legacy snapshots migrate to the 12.1 friendly class-color CVar")
-equal(friendlyNamesSnapshot[friendlyPlayerClassColorsCVar], "0", "snapshot migration preserves the current 12.1 class-color value")
-equal(friendlyNamesSnapshot[legacyFriendlyPlayerClassColorsCVar], nil, "snapshot migration removes the obsolete class-color CVar")
+equal(cvarValues[friendlyHealthClassColorsCVar], "0", "0.6.0 migration restores the original friendly health-bar class-color value")
+equal(friendlyNamesSnapshot[friendlyHealthClassColorsCVar], nil, "0.6.0 migration removes the erroneous health-bar snapshot")
+equal(cvarValues[friendlyPlayerClassColorsCVar], "1", "0.6.0 migration reapplies the correct friendly-name class-color CVar")
+equal(friendlyNamesSnapshot[friendlyPlayerClassColorsCVar], "1", "0.6.0 migration preserves the safest available name-color restoration value")
+friendlyNamesSnapshot[friendlyPlayerClassColorsCVar] = "0"
 
 HTF.FriendlyNames:SetFontSize(19)
 equal(HTF:GetSetting("friendlyNameFontSize"), 19, "friendly name font size persists in settings")
