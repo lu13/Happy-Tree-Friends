@@ -370,6 +370,37 @@ function FriendlyNames:ApplyClassColorToNameplate(unit, name)
 	return colorOk and colorResult ~= false
 end
 
+function FriendlyNames:ApplyMouseoverClassColor(unitFrame)
+	if not HTF:GetSetting("friendlyNamesOnly") or not HTF:GetSetting("friendlyNameClassColors") then
+		return false
+	end
+
+	local frameOk, unit, name = pcall(function()
+		return unitFrame and (unitFrame.unit or unitFrame.displayedUnit), unitFrame and unitFrame.name
+	end)
+	if not frameOk or HTF:IsSecretValue(unit) or HTF:IsSecretValue(name) or type(unit) ~= "string" then
+		return false
+	end
+	if type(UnitIsUnit) == "function" then
+		local mouseoverOk, isMouseover = pcall(UnitIsUnit, unit, "mouseover")
+		if not mouseoverOk or HTF:IsSecretValue(isMouseover) or isMouseover ~= true then
+			return false
+		end
+	end
+	if not self:IsFriendlyPlayerNameplate(unit) then
+		return false
+	end
+
+	local classColorValue, classColorSupported = self:GetCVarValue(FRIENDLY_PLAYER_CLASS_COLORS_CVAR)
+	if not classColorSupported or classColorValue ~= "1" then
+		return false
+	end
+	pcall(function()
+		unitFrame.colorNameWithClassColor = true
+	end)
+	return self:ApplyClassColorToNameplate(unit, name)
+end
+
 function FriendlyNames:RefreshClassColorForNameplate(unit)
 	if not self:IsFriendlyPlayerNameplate(unit) then
 		return false
@@ -488,6 +519,26 @@ function FriendlyNames:InstallNameplateOptionsHook()
 	end)
 	if hookOk then
 		self.nameplateOptionsHookInstalled = true
+	end
+	return hookOk
+end
+
+function FriendlyNames:InstallNameplateMouseoverHook()
+	if self.nameplateMouseoverHookInstalled then
+		return true
+	end
+	if type(hooksecurefunc) ~= "function" or type(CompactUnitFrame_OnEvent) ~= "function" then
+		return false
+	end
+
+	-- Existing nameplates may already hold the original mixin script, so hook its global dispatcher.
+	local hookOk = pcall(hooksecurefunc, "CompactUnitFrame_OnEvent", function(unitFrame, event)
+		if event == "UPDATE_MOUSEOVER_UNIT" then
+			self:ApplyMouseoverClassColor(unitFrame)
+		end
+	end)
+	if hookOk then
+		self.nameplateMouseoverHookInstalled = true
 	end
 	return hookOk
 end
@@ -699,6 +750,7 @@ function FriendlyNames:OnEvent(event, cvarName)
 
 	if event == "PLAYER_ENTERING_WORLD" then
 		self:InstallNameplateOptionsHook()
+		self:InstallNameplateMouseoverHook()
 		self:ScheduleSynchronize()
 		self:ScheduleFontRefresh()
 	end
@@ -729,5 +781,6 @@ function FriendlyNames:Initialize()
 		self:OnEvent(event, ...)
 	end)
 	self:InstallNameplateOptionsHook()
+	self:InstallNameplateMouseoverHook()
 	self:Synchronize()
 end
