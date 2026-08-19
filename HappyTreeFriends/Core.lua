@@ -264,6 +264,9 @@ function HTF:BuildDiagnosticReport()
 		table.insert(lines, string.format("- visibleAdventureStatus: %d/%d", self.Stats:GetVisibleAdventureStatusCount(), #self.Stats.ADVENTURE_DEFINITIONS))
 		table.insert(lines, "- statsPosition: " .. self.Stats:GetPositionSummary())
 	end
+	if self.FriendlyNames and self.FriendlyNames.GetDiagnosticSummary then
+		table.insert(lines, "- friendlyNamesRuntime: " .. self.FriendlyNames:GetDiagnosticSummary())
+	end
 	if ledger then
 		table.insert(lines, string.format("- sessionRepairs: %s", self:FormatMoney(ledger.repairTotal)))
 		table.insert(lines, string.format("- sessionJunkIncome: %s", ledger.junkIncomeKnown and self:FormatMoney(ledger.junkIncome) or "<unavailable>"))

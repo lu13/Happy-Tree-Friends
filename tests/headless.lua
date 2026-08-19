@@ -199,6 +199,20 @@ function objectMethods:SetTextColor(r, g, b, a)
 	self.textColor = { r, g, b, a }
 end
 
+function objectMethods:GetTextColor()
+	local color = self.textColor or { 1, 1, 1, 1 }
+	return color[1], color[2], color[3], color[4]
+end
+
+function objectMethods:SetVertexColor(r, g, b, a)
+	self.vertexColor = { r, g, b, a }
+end
+
+function objectMethods:GetVertexColor()
+	local color = self.vertexColor or self.textColor or { 1, 1, 1, 1 }
+	return color[1], color[2], color[3], color[4]
+end
+
 function objectMethods:SetColorTexture(r, g, b, a)
 	self.textureColor = { r, g, b, a }
 end
@@ -420,7 +434,7 @@ NamePlateDriverMixin = {
 
 function CompactUnitFrame_OnEvent(unitFrame, event)
 	if event == "UPDATE_MOUSEOVER_UNIT" and unitFrame.name then
-		unitFrame.name:SetTextColor(1, 1, 1, 1)
+		unitFrame.name:SetVertexColor(1, 1, 1, 1)
 		unitFrame.colorNameWithClassColor = false
 	end
 end
@@ -858,6 +872,8 @@ local formatCases = {
 	DEBUG_STATS_POSITION_SAVED = { "TOP", "TOP", 1, -1 },
 	DEBUG_STAT_VISIBILITY_UPDATED = { "haste", "true" },
 	DEBUG_FRIENDLY_NAMES_CVAR_FAILED = { friendlyPlayerNamesCVar },
+	DEBUG_FRIENDLY_NAMES_MOUSEOVER_TRACE = { "UPDATE_MOUSEOVER_UNIT", "nameplate1", "1,1,1", "true", "1,0,0", "true" },
+	DEBUG_FRIENDLY_NAMES_MOUSEOVER_AFTER = { "nameplate1", "1,0,0", "1,0,0" },
 }
 local unpackValues = table.unpack or unpack
 for key, arguments in pairs(formatCases) do
@@ -1057,9 +1073,9 @@ accessibleFriendlyNameplate.UnitFrame.name = CreateFrame("FontString", nil, acce
 accessibleFriendlyNameplate.UnitFrame.name:SetFont("PerPlateFont", 12, "OUTLINE")
 accessibleFriendlyNameplate.UnitFrame.UpdateNameClassColor = function(unitFrame)
 	if cvarValues[friendlyPlayerClassColorsCVar] == "1" then
-		unitFrame.name:SetTextColor(1, 0.49, 0.04, 1)
+		unitFrame.name:SetVertexColor(1, 0.49, 0.04, 1)
 	else
-		unitFrame.name:SetTextColor(1, 1, 1, 1)
+		unitFrame.name:SetVertexColor(1, 1, 1, 1)
 	end
 end
 mockNamePlates.nameplate1 = accessibleFriendlyNameplate
@@ -1068,24 +1084,31 @@ nameplateUnitInfo.nameplate1 = { friendly = true, player = true, classToken = "D
 fireEvent("NAME_PLATE_UNIT_ADDED", "nameplate1")
 local _, accessibleFriendlyNameSize = accessibleFriendlyNameplate.UnitFrame.name:GetFont()
 equal(accessibleFriendlyNameSize, 19, "new accessible friendly nameplates receive the selected font size")
-equal(accessibleFriendlyNameplate.UnitFrame.name.textColor[1], 1, "new accessible friendly nameplates receive their class color")
-equal(accessibleFriendlyNameplate.UnitFrame.name.textColor[2], 0.49, "class color uses the unit class green component")
-equal(accessibleFriendlyNameplate.UnitFrame.name.textColor[3], 0.04, "class color uses the unit class blue component")
+equal(accessibleFriendlyNameplate.UnitFrame.name.vertexColor[1], 1, "new accessible friendly nameplates receive their class color")
+equal(accessibleFriendlyNameplate.UnitFrame.name.vertexColor[2], 0.49, "class color uses the unit class green component")
+equal(accessibleFriendlyNameplate.UnitFrame.name.vertexColor[3], 0.04, "class color uses the unit class blue component")
 
 HTF:SetSetting("friendlyNameClassColors", false)
 flushTimers()
-equal(accessibleFriendlyNameplate.UnitFrame.name.textColor[2], 1, "turning class colors off refreshes visible friendly nameplates")
+equal(accessibleFriendlyNameplate.UnitFrame.name.vertexColor[2], 1, "turning class colors off refreshes visible friendly nameplates")
 equal(NamePlateFriendlyFrameOptions.nameMouseoverColor, initialFriendlyMouseoverColor, "turning class colors off restores the friendly-name mouseover color")
 mouseoverUnit = "nameplate1"
 CompactUnitFrame_OnEvent(accessibleFriendlyNameplate.UnitFrame, "UPDATE_MOUSEOVER_UNIT")
-equal(accessibleFriendlyNameplate.UnitFrame.name.textColor[2], 1, "mouseover hook leaves class colors disabled")
+equal(accessibleFriendlyNameplate.UnitFrame.name.vertexColor[2], 1, "mouseover hook leaves class colors disabled")
 HTF:SetSetting("friendlyNameClassColors", true)
 flushTimers()
-equal(accessibleFriendlyNameplate.UnitFrame.name.textColor[2], 0.49, "turning class colors on refreshes visible friendly nameplates")
+equal(accessibleFriendlyNameplate.UnitFrame.name.vertexColor[2], 0.49, "turning class colors on refreshes visible friendly nameplates")
 equal(NamePlateFriendlyFrameOptions.nameMouseoverColor, nil, "class colors suppress the friendly-name mouseover color override")
 CompactUnitFrame_OnEvent(accessibleFriendlyNameplate.UnitFrame, "UPDATE_MOUSEOVER_UNIT")
-equal(accessibleFriendlyNameplate.UnitFrame.name.textColor[2], 0.49, "mouseover redraw restores the friendly player's class color")
+equal(accessibleFriendlyNameplate.UnitFrame.name.vertexColor[2], 0.49, "mouseover redraw restores the friendly player's class color")
 check(accessibleFriendlyNameplate.UnitFrame.colorNameWithClassColor, "mouseover refresh preserves the native class-color state")
+
+HTF.db.debug = true
+CompactUnitFrame_OnEvent(accessibleFriendlyNameplate.UnitFrame, "UPDATE_MOUSEOVER_UNIT")
+flushTimers()
+contains(HTF.debugLog[#HTF.debugLog - 1], "UPDATE_MOUSEOVER_UNIT", "debug mode records the mouseover redraw action")
+contains(HTF.debugLog[#HTF.debugLog], "nameplate1", "debug mode records the post-event friendly-name color check")
+HTF.db.debug = false
 
 local enemyMouseoverNameplate = CreateFrame("Frame", nil, UIParent)
 enemyMouseoverNameplate.name = CreateFrame("FontString", nil, enemyMouseoverNameplate)
@@ -1094,7 +1117,7 @@ nameplateUnitInfo.nameplateEnemy = { friendly = false, player = true, classToken
 mouseoverUnit = "nameplateEnemy"
 CompactUnitFrame_OnEvent(enemyMouseoverNameplate, "UPDATE_MOUSEOVER_UNIT")
 check(not enemyMouseoverNameplate.colorNameWithClassColor, "friendly class-color hover handling does not modify enemy nameplates")
-equal(enemyMouseoverNameplate.name.textColor[2], 1, "enemy mouseover color remains controlled by the game")
+equal(enemyMouseoverNameplate.name.vertexColor[2], 1, "enemy mouseover color remains controlled by the game")
 mouseoverUnit = nil
 NamePlateDriverMixin.UpdateNamePlateOptions()
 equal(NamePlateFriendlyFrameOptions.nameMouseoverColor, nil, "nameplate option updates retain the class-color mouseover policy")
@@ -1106,7 +1129,7 @@ mockNamePlates.nameplate3 = fallbackFriendlyNameplate
 fallbackFriendlyNameplate.UnitFrame.unit = "nameplate3"
 nameplateUnitInfo.nameplate3 = { friendly = true, player = true, classToken = "DRUID" }
 fireEvent("NAME_PLATE_UNIT_ADDED", "nameplate3")
-equal(fallbackFriendlyNameplate.UnitFrame.name.textColor[2], 0.49, "class-color fallback updates accessible nameplates without a native refresh method")
+equal(fallbackFriendlyNameplate.UnitFrame.name.vertexColor[2], 0.49, "class-color fallback updates accessible nameplates without a native refresh method")
 
 local secretClassNameplate = CreateFrame("Frame", nil, UIParent)
 secretClassNameplate.UnitFrame = CreateFrame("Frame", nil, secretClassNameplate)
@@ -1745,6 +1768,7 @@ local report = HTF:BuildDiagnosticReport()
 contains(report, "Happy Tree Friends - Diagnostic Report", "diagnostic report header")
 contains(report, "WoW build: 69299", "diagnostic report build")
 contains(report, "repairFromGuild: false", "diagnostic report includes guild repair setting")
+contains(report, "friendlyNamesRuntime:", "diagnostic report includes friendly-name runtime details")
 contains(report, "friendlyNamesOnly: false", "diagnostic report includes friendly names-only setting")
 contains(report, "friendlyNameClassColors: false", "diagnostic report includes friendly name class-color setting")
 contains(report, "friendlyNameCustomFontSize: false", "diagnostic report includes friendly name custom-size setting")

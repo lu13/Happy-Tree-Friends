@@ -362,12 +362,90 @@ function FriendlyNames:ApplyClassColorToNameplate(unit, name)
 		return false
 	end
 	local colorOk, colorResult = pcall(function()
-		if not name or type(name.SetTextColor) ~= "function" then
+		if not name then
 			return false
 		end
-		return name:SetTextColor(r, g, b, 1)
+		-- Blizzard's nameplate renderer colors its FontString through the
+		-- texture vertex color, including during mouseover redraws.
+		if type(name.SetVertexColor) == "function" then
+			return name:SetVertexColor(r, g, b, 1)
+		end
+		if type(name.SetTextColor) == "function" then
+			return name:SetTextColor(r, g, b, 1)
+		end
+		return false
 	end)
 	return colorOk and colorResult ~= false
+end
+
+function FriendlyNames:GetNameColorText(name)
+	local colorOk, r, g, b = pcall(function()
+		if not name then
+			return nil
+		end
+		if type(name.GetVertexColor) == "function" then
+			return name:GetVertexColor()
+		end
+		if type(name.GetTextColor) == "function" then
+			return name:GetTextColor()
+		end
+		return nil
+	end)
+	if not colorOk then
+		return "<unavailable>"
+	end
+	if HTF:IsSecretValue(r) or HTF:IsSecretValue(g) or HTF:IsSecretValue(b) then
+		return "<restricted>"
+	end
+	if not HTF:IsSafeNumber(r) or not HTF:IsSafeNumber(g) or not HTF:IsSafeNumber(b) then
+		return "<unavailable>"
+	end
+	return string.format("%.3f,%.3f,%.3f", r, g, b)
+end
+
+function FriendlyNames:GetExpectedClassColorText(unit)
+	local r, g, b = self:GetClassColor(unit)
+	if not r then
+		return "<unavailable>"
+	end
+	return string.format("%.3f,%.3f,%.3f", r, g, b)
+end
+
+function FriendlyNames:ScheduleMouseoverColorDiagnostic(unitFrame, unit)
+	if not HTF:GetSetting("debug") then
+		return
+	end
+
+	self.pendingMouseoverDiagnostic = { unitFrame = unitFrame, unit = unit }
+	if self.mouseoverDiagnosticScheduled then
+		return
+	end
+	self.mouseoverDiagnosticScheduled = true
+
+	local function logFollowUp()
+		self.mouseoverDiagnosticScheduled = false
+		local pending = self.pendingMouseoverDiagnostic
+		self.pendingMouseoverDiagnostic = nil
+		if not pending or not HTF:GetSetting("debug") then
+			return
+		end
+		local frameOk, name = pcall(function()
+			return pending.unitFrame and pending.unitFrame.name
+		end)
+		local colorText = frameOk and self:GetNameColorText(name) or "<unavailable>"
+		HTF:Debugf(
+			HTF.L.DEBUG_FRIENDLY_NAMES_MOUSEOVER_AFTER,
+			pending.unit,
+			colorText,
+			self:GetExpectedClassColorText(pending.unit)
+		)
+	end
+
+	if type(C_Timer) == "table" and type(C_Timer.After) == "function" then
+		C_Timer.After(0, logFollowUp)
+	else
+		logFollowUp()
+	end
 end
 
 function FriendlyNames:ApplyMouseoverClassColor(unitFrame)
@@ -395,10 +473,27 @@ function FriendlyNames:ApplyMouseoverClassColor(unitFrame)
 	if not classColorSupported or classColorValue ~= "1" then
 		return false
 	end
+	local beforeColor = HTF:GetSetting("debug") and self:GetNameColorText(name) or nil
 	pcall(function()
 		unitFrame.colorNameWithClassColor = true
 	end)
-	return self:ApplyClassColorToNameplate(unit, name)
+	local applied = self:ApplyClassColorToNameplate(unit, name)
+	if HTF:GetSetting("debug") then
+		local stateOk, classColorState = pcall(function()
+			return unitFrame.colorNameWithClassColor
+		end)
+		HTF:Debugf(
+			HTF.L.DEBUG_FRIENDLY_NAMES_MOUSEOVER_TRACE,
+			"UPDATE_MOUSEOVER_UNIT",
+			unit,
+			beforeColor,
+			tostring(applied == true),
+			self:GetNameColorText(name),
+			stateOk and HTF:SafeScalarText(classColorState, "nil") or "<unavailable>"
+		)
+		self:ScheduleMouseoverColorDiagnostic(unitFrame, unit)
+	end
+	return applied
 end
 
 function FriendlyNames:RefreshClassColorForNameplate(unit)
@@ -534,6 +629,9 @@ function FriendlyNames:InstallNameplateMouseoverHook()
 	-- Existing nameplates may already hold the original mixin script, so hook its global dispatcher.
 	local hookOk = pcall(hooksecurefunc, "CompactUnitFrame_OnEvent", function(unitFrame, event)
 		if event == "UPDATE_MOUSEOVER_UNIT" then
+			if HTF:GetSetting("debug") then
+				self.mouseoverHookCalls = (self.mouseoverHookCalls or 0) + 1
+			end
 			self:ApplyMouseoverClassColor(unitFrame)
 		end
 	end)
@@ -541,6 +639,24 @@ function FriendlyNames:InstallNameplateMouseoverHook()
 		self.nameplateMouseoverHookInstalled = true
 	end
 	return hookOk
+end
+
+function FriendlyNames:GetDiagnosticSummary()
+	local values = {}
+	for _, cvarName in ipairs(MANAGED_CVARS) do
+		local value, supported = self:GetCVarValue(cvarName)
+		values[cvarName] = supported and value or "<unavailable>"
+	end
+	return string.format(
+		"worldNames=%s, nameplates=%s, namesOnly=%s, classColors=%s, optionsHook=%s, mouseoverHook=%s, mouseoverHookCalls=%d",
+		values[FRIENDLY_PLAYER_NAMES_CVAR],
+		values[FRIENDLY_PLAYER_NAMEPLATES_CVAR],
+		values[FRIENDLY_PLAYER_NAMES_ONLY_CVAR],
+		values[FRIENDLY_PLAYER_CLASS_COLORS_CVAR],
+		tostring(self.nameplateOptionsHookInstalled == true),
+		tostring(self.nameplateMouseoverHookInstalled == true),
+		self.mouseoverHookCalls or 0
+	)
 end
 
 function FriendlyNames:GetSnapshot()

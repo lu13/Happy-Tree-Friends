@@ -164,6 +164,8 @@ local locales = {
 		DEBUG_FRIENDLY_NAMES_APPLIED = "Friendly Names Only applied its managed game settings.",
 		DEBUG_FRIENDLY_NAMES_RESTORED = "Friendly Names Only restored the previous friendly-name settings.",
 		DEBUG_FRIENDLY_NAMES_CVAR_FAILED = "Friendly Names Only could not update %s; it will retry later.",
+		DEBUG_FRIENDLY_NAMES_MOUSEOVER_TRACE = "Friendly-name trace: action=%s, unit=%s, before=%s, applied=%s, after=%s, classState=%s.",
+		DEBUG_FRIENDLY_NAMES_MOUSEOVER_AFTER = "Friendly-name follow-up: unit=%s, color=%s, expected=%s.",
 	},
 	zhCN = {
 		ADDON_NAME = "Happy Tree Friends",
@@ -328,6 +330,8 @@ local locales = {
 		DEBUG_FRIENDLY_NAMES_APPLIED = "友方仅姓名模式已应用所管理的游戏设置。",
 		DEBUG_FRIENDLY_NAMES_RESTORED = "友方仅姓名模式已恢复原友方姓名设置。",
 		DEBUG_FRIENDLY_NAMES_CVAR_FAILED = "友方仅姓名模式无法更新 %s，稍后会重试。",
+		DEBUG_FRIENDLY_NAMES_MOUSEOVER_TRACE = "友方姓名追踪：动作=%s，单位=%s，补色前=%s，补色成功=%s，补色后=%s，内部职业色状态=%s。",
+		DEBUG_FRIENDLY_NAMES_MOUSEOVER_AFTER = "友方姓名后续检查：单位=%s，当前颜色=%s，预期职业色=%s。",
 	},
 }
 
