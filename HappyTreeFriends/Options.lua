@@ -706,8 +706,19 @@ function Options:CreatePanel()
 	panel:SetFrameStrata("DIALOG")
 	panel:SetToplevel(true)
 	panel:SetClampedToScreen(true)
+	panel:SetMovable(true)
+	panel:EnableMouse(true)
+	panel:RegisterForDrag("LeftButton")
+	panel:SetScript("OnDragStart", function(frame)
+		frame:StartMoving()
+	end)
+	panel:SetScript("OnDragStop", function(frame)
+		frame:StopMovingOrSizing()
+		self.panelPositioned = true
+	end)
 	applyBackdrop(panel, COLORS.background, COLORS.border)
 	self.panel = panel
+	self.panelPositioned = false
 
 	if type(UISpecialFrames) == "table" then
 		local alreadyRegistered = false
@@ -721,14 +732,6 @@ function Options:CreatePanel()
 			table.insert(UISpecialFrames, panel:GetName())
 		end
 	end
-
-	local closeButton = createActionButton(panel, "×")
-	closeButton:SetSize(28, 28)
-	closeButton:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -12, -12)
-	closeButton:SetScript("OnClick", function()
-		panel:Hide()
-	end)
-	self.closeButton = closeButton
 
 	local sidebar = CreateFrame("Frame", nil, panel, "BackdropTemplate")
 	sidebar:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
@@ -770,6 +773,14 @@ function Options:CreatePanel()
 	self:CreateStatsPage(self.pages.stats)
 	self:CreateNameplatesPage(self.pages.nameplates)
 	self:CreateDebugPage(self.pages.debug)
+
+	local closeButton = CreateFrame("Button", nil, panel, "UIPanelCloseButton")
+	closeButton:SetSize(32, 32)
+	closeButton:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 4, 4)
+	closeButton:SetScript("OnClick", function()
+		panel:Hide()
+	end)
+	self.closeButton = closeButton
 
 	panel:SetScript("OnShow", function()
 		self:Refresh()
@@ -914,8 +925,11 @@ function Options:Open(page)
 	end
 
 	self:SelectPage(page or "overview")
-	self.panel:ClearAllPoints()
-	self.panel:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+	if not self.panelPositioned then
+		self.panel:ClearAllPoints()
+		self.panel:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+		self.panelPositioned = true
+	end
 	self.panel:SetFrameStrata("DIALOG")
 	self.panel:Show()
 	self:Refresh()

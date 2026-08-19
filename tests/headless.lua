@@ -396,6 +396,13 @@ C_NamePlate = {
 	GetNamePlateForUnit = function(unit)
 		return mockNamePlates[unit]
 	end,
+	GetNamePlates = function()
+		local namePlates = {}
+		for _, namePlate in pairs(mockNamePlates) do
+			table.insert(namePlates, namePlate)
+		end
+		return namePlates
+	end,
 }
 
 function UnitIsFriend(_, unit)
@@ -591,7 +598,15 @@ function UnitName()
 	return secretIdentity and SECRET or "Tester"
 end
 
-function UnitClass()
+RAID_CLASS_COLORS = {
+	DRUID = { r = 1, g = 0.49, b = 0.04 },
+}
+
+function UnitClass(unit)
+	local unitInfo = nameplateUnitInfo[unit]
+	if unitInfo and unitInfo.classToken then
+		return unitInfo.classToken, unitInfo.classToken, 11
+	end
 	local localizedClass = testLocale == "zhCN" and "德鲁伊" or "Druid"
 	return secretIdentity and SECRET or localizedClass, "DRUID", 11
 end
@@ -868,6 +883,8 @@ fireEvent("PLAYER_LOGIN")
 check(HTF.Options.panel ~= nil, "options panel is created at login")
 equal(HTF.Options.panel:GetName(), "HappyTreeFriendsSettingsFrame", "options uses a dedicated top-level frame")
 check(HTF.Options.closeButton ~= nil, "dedicated settings frame includes a close button")
+equal(HTF.Options.closeButton.template, "UIPanelCloseButton", "dedicated settings frame uses the standard close control")
+check(HTF.Options.panel.movable, "dedicated settings frame can be moved")
 equal(HTF.Options.selectedPageKey, "overview", "overview is the initial page")
 equal(HTF.Options:IsPageVisible("overview"), false, "a hidden settings panel is not visible")
 check(registeredCategory and registeredCategory.registered, "options panel is registered as an addon category")
@@ -992,11 +1009,46 @@ local accessibleFriendlyNameplate = CreateFrame("Frame", nil, UIParent)
 accessibleFriendlyNameplate.UnitFrame = CreateFrame("Frame", nil, accessibleFriendlyNameplate)
 accessibleFriendlyNameplate.UnitFrame.name = CreateFrame("FontString", nil, accessibleFriendlyNameplate.UnitFrame)
 accessibleFriendlyNameplate.UnitFrame.name:SetFont("PerPlateFont", 12, "OUTLINE")
+accessibleFriendlyNameplate.UnitFrame.UpdateNameClassColor = function(unitFrame)
+	if cvarValues[friendlyPlayerClassColorsCVar] == "1" then
+		unitFrame.name:SetTextColor(1, 0.49, 0.04, 1)
+	else
+		unitFrame.name:SetTextColor(1, 1, 1, 1)
+	end
+end
 mockNamePlates.nameplate1 = accessibleFriendlyNameplate
-nameplateUnitInfo.nameplate1 = { friendly = true, player = true }
+accessibleFriendlyNameplate.UnitFrame.unit = "nameplate1"
+nameplateUnitInfo.nameplate1 = { friendly = true, player = true, classToken = "DRUID" }
 fireEvent("NAME_PLATE_UNIT_ADDED", "nameplate1")
 local _, accessibleFriendlyNameSize = accessibleFriendlyNameplate.UnitFrame.name:GetFont()
 equal(accessibleFriendlyNameSize, 19, "new accessible friendly nameplates receive the selected font size")
+equal(accessibleFriendlyNameplate.UnitFrame.name.textColor[1], 1, "new accessible friendly nameplates receive their class color")
+equal(accessibleFriendlyNameplate.UnitFrame.name.textColor[2], 0.49, "class color uses the unit class green component")
+equal(accessibleFriendlyNameplate.UnitFrame.name.textColor[3], 0.04, "class color uses the unit class blue component")
+
+HTF:SetSetting("friendlyNameClassColors", false)
+flushTimers()
+equal(accessibleFriendlyNameplate.UnitFrame.name.textColor[2], 1, "turning class colors off refreshes visible friendly nameplates")
+HTF:SetSetting("friendlyNameClassColors", true)
+flushTimers()
+equal(accessibleFriendlyNameplate.UnitFrame.name.textColor[2], 0.49, "turning class colors on refreshes visible friendly nameplates")
+
+local fallbackFriendlyNameplate = CreateFrame("Frame", nil, UIParent)
+fallbackFriendlyNameplate.UnitFrame = CreateFrame("Frame", nil, fallbackFriendlyNameplate)
+fallbackFriendlyNameplate.UnitFrame.name = CreateFrame("FontString", nil, fallbackFriendlyNameplate.UnitFrame)
+mockNamePlates.nameplate3 = fallbackFriendlyNameplate
+fallbackFriendlyNameplate.UnitFrame.unit = "nameplate3"
+nameplateUnitInfo.nameplate3 = { friendly = true, player = true, classToken = "DRUID" }
+fireEvent("NAME_PLATE_UNIT_ADDED", "nameplate3")
+equal(fallbackFriendlyNameplate.UnitFrame.name.textColor[2], 0.49, "class-color fallback updates accessible nameplates without a native refresh method")
+
+local secretClassNameplate = CreateFrame("Frame", nil, UIParent)
+secretClassNameplate.UnitFrame = CreateFrame("Frame", nil, secretClassNameplate)
+secretClassNameplate.UnitFrame.name = CreateFrame("FontString", nil, secretClassNameplate.UnitFrame)
+mockNamePlates.nameplate4 = secretClassNameplate
+nameplateUnitInfo.nameplate4 = { friendly = true, player = true, classToken = SECRET }
+local secretClassOk = pcall(HTF.FriendlyNames.RefreshClassColorForNameplate, HTF.FriendlyNames, "nameplate4")
+check(secretClassOk, "restricted class values do not break friendly-name color refreshes")
 
 nameplateUnitInfo.nameplate2 = { friendly = true, player = true }
 fireEvent("NAME_PLATE_UNIT_ADDED", "nameplate2")
@@ -1102,10 +1154,17 @@ HTF.Options:Open("stats")
 check(HTF.Options:IsPageVisible("stats"), "stats page becomes visible")
 equal(settingsOpenCalls, settingsOpenCallsBeforeSlash, "slash command opens the dedicated settings frame directly")
 equal(HTF.Options.panel.points[1][1], "CENTER", "dedicated settings frame is centered when opened")
+HTF.Options.panel.scripts.OnDragStart(HTF.Options.panel)
+check(HTF.Options.panel.moving, "dedicated settings frame starts moving when dragged")
+HTF.Options.panel:ClearAllPoints()
+HTF.Options.panel:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 40, -40)
+HTF.Options.panel.scripts.OnDragStop(HTF.Options.panel)
+check(HTF.Options.panel.stoppedMoving, "dedicated settings frame stops moving when drag ends")
 HTF.Options.closeButton.scripts.OnClick(HTF.Options.closeButton)
 check(not HTF.Options.panel:IsShown(), "settings close button hides the dedicated frame")
 HTF.Options:Open("stats")
 check(HTF.Options.panel:IsShown(), "opening settings restores the dedicated frame")
+equal(HTF.Options.panel.points[1][1], "TOPLEFT", "reopening settings keeps the moved window position")
 equal(HTF.Stats.view, nil, "settings page no longer owns a live stat-value view")
 local configuredStatRows = 0
 for _ in pairs(HTF.Options.statSettingRows) do

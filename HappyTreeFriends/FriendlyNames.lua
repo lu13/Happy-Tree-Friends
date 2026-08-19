@@ -282,26 +282,146 @@ function FriendlyNames:IsFriendlyPlayerNameplate(unit)
 	return true
 end
 
-function FriendlyNames:ApplyFontToNameplate(unit)
-	if not self:IsCustomFontSizeActive() or not self:IsFriendlyPlayerNameplate(unit)
-		or type(C_NamePlate) ~= "table" or type(C_NamePlate.GetNamePlateForUnit) ~= "function" then
-		return false
+function FriendlyNames:GetNameplateComponents(unit)
+	if type(C_NamePlate) ~= "table" or type(C_NamePlate.GetNamePlateForUnit) ~= "function" then
+		return nil, nil
 	end
 
-	local ok, name = pcall(function()
+	local ok, unitFrame, name = pcall(function()
 		local namePlate = C_NamePlate.GetNamePlateForUnit(unit)
-		return namePlate and namePlate.UnitFrame and namePlate.UnitFrame.name
+		local frame = namePlate and namePlate.UnitFrame
+		return frame, frame and frame.name
 	end)
-	if not ok or not name or type(name.GetFont) ~= "function" or type(name.SetFont) ~= "function" then
+	if not ok or HTF:IsSecretValue(unitFrame) or HTF:IsSecretValue(name) then
+		return nil, nil
+	end
+	return unitFrame, name
+end
+
+function FriendlyNames:ApplyFontToNameplate(unit)
+	if not self:IsCustomFontSizeActive() or not self:IsFriendlyPlayerNameplate(unit) then
 		return false
 	end
 
-	local fontOk, font, _, flags = pcall(name.GetFont, name)
+	local _, name = self:GetNameplateComponents(unit)
+	local fontOk, font, _, flags = pcall(function()
+		if not name or type(name.GetFont) ~= "function" or type(name.SetFont) ~= "function" then
+			return nil
+		end
+		return name:GetFont()
+	end)
 	if not fontOk or type(font) ~= "string" then
 		return false
 	end
-	local setOk, result = pcall(name.SetFont, name, font, self:GetFontSize(), flags)
+	local setOk, result = pcall(function()
+		return name:SetFont(font, self:GetFontSize(), flags)
+	end)
 	return setOk and result ~= false
+end
+
+function FriendlyNames:GetClassColor(unit)
+	if type(UnitClass) ~= "function" or type(RAID_CLASS_COLORS) ~= "table" then
+		return nil
+	end
+
+	local classOk, _, classToken = pcall(UnitClass, unit)
+	if not classOk or HTF:IsSecretValue(classToken) or type(classToken) ~= "string" then
+		return nil
+	end
+
+	local color = RAID_CLASS_COLORS[classToken]
+	if HTF:IsSecretValue(color) or type(color) ~= "table" then
+		return nil
+	end
+
+	local r, g, b
+	if type(color.GetRGB) == "function" then
+		local colorOk
+		colorOk, r, g, b = pcall(color.GetRGB, color)
+		if not colorOk then
+			r, g, b = nil, nil, nil
+		end
+	end
+	r = r or color.r
+	g = g or color.g
+	b = b or color.b
+	if not HTF:IsSafeNumber(r) or not HTF:IsSafeNumber(g) or not HTF:IsSafeNumber(b) then
+		return nil
+	end
+	return r, g, b
+end
+
+function FriendlyNames:RefreshClassColorForNameplate(unit)
+	if not self:IsFriendlyPlayerNameplate(unit) then
+		return false
+	end
+
+	local unitFrame, name = self:GetNameplateComponents(unit)
+	if not unitFrame then
+		return false
+	end
+
+	local updateOk, updateResult = pcall(function()
+		if type(unitFrame.UpdateNameClassColor) ~= "function" then
+			return false
+		end
+		return unitFrame:UpdateNameClassColor()
+	end)
+	local refreshed = updateOk and updateResult ~= false
+
+	if not HTF:GetSetting("friendlyNamesOnly") or not HTF:GetSetting("friendlyNameClassColors") then
+		return refreshed
+	end
+	local r, g, b = self:GetClassColor(unit)
+	if not r then
+		return refreshed
+	end
+	local colorOk, colorResult = pcall(function()
+		if not name or type(name.SetTextColor) ~= "function" then
+			return false
+		end
+		return name:SetTextColor(r, g, b, 1)
+	end)
+	return (colorOk and colorResult ~= false) or refreshed
+end
+
+function FriendlyNames:RefreshVisibleClassColors()
+	if type(C_NamePlate) ~= "table" or type(C_NamePlate.GetNamePlates) ~= "function" then
+		return
+	end
+
+	local platesOk, namePlates = pcall(C_NamePlate.GetNamePlates)
+	if not platesOk or type(namePlates) ~= "table" then
+		return
+	end
+
+	for _, namePlate in ipairs(namePlates) do
+		local unitOk, unit = pcall(function()
+			local unitFrame = namePlate and namePlate.UnitFrame
+			return namePlate and namePlate.namePlateUnitToken
+				or unitFrame and (unitFrame.unit or unitFrame.displayedUnit)
+		end)
+		if unitOk and not HTF:IsSecretValue(unit) and type(unit) == "string" then
+			self:RefreshClassColorForNameplate(unit)
+		end
+	end
+end
+
+function FriendlyNames:ScheduleClassColorRefresh()
+	if self.classColorRefreshScheduled then
+		return
+	end
+
+	self.classColorRefreshScheduled = true
+	local function refresh()
+		self.classColorRefreshScheduled = false
+		self:RefreshVisibleClassColors()
+	end
+	if type(C_Timer) == "table" and type(C_Timer.After) == "function" then
+		C_Timer.After(0, refresh)
+	else
+		refresh()
+	end
 end
 
 function FriendlyNames:GetSnapshot()
@@ -404,6 +524,7 @@ function FriendlyNames:Apply()
 	changed = nameplatesChanged or changed
 	self.changingCVars = false
 	self:ApplyFontSize()
+	self:ScheduleClassColorRefresh()
 
 	if success and changed then
 		HTF:Debug(HTF.L.DEBUG_FRIENDLY_NAMES_APPLIED)
@@ -428,6 +549,7 @@ function FriendlyNames:Restore()
 	end
 	self.changingCVars = false
 	success = self:RestoreFontSize() and success
+	self:ScheduleClassColorRefresh()
 
 	if success then
 		HTF.db.friendlyNamesOnlySnapshot = nil
@@ -497,6 +619,7 @@ function FriendlyNames:OnEvent(event, cvarName)
 	end
 
 	if event == "NAME_PLATE_UNIT_ADDED" then
+		self:RefreshClassColorForNameplate(cvarName)
 		if self:IsCustomFontSizeActive() and self:IsFriendlyPlayerNameplate(cvarName) and not self:ApplyFontToNameplate(cvarName) then
 			self:ScheduleFontRefresh()
 		end
