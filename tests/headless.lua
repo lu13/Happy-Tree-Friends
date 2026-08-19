@@ -405,6 +405,29 @@ C_NamePlate = {
 	end,
 }
 
+local initialFriendlyMouseoverColor = { r = 1, g = 1, b = 0 }
+local updatedFriendlyMouseoverColor
+NamePlateFriendlyFrameOptions = {
+	nameMouseoverColor = initialFriendlyMouseoverColor,
+}
+
+NamePlateDriverMixin = {
+	UpdateNamePlateOptions = function()
+		updatedFriendlyMouseoverColor = { r = 1, g = 1, b = 0 }
+		NamePlateFriendlyFrameOptions.nameMouseoverColor = updatedFriendlyMouseoverColor
+	end,
+}
+
+function hooksecurefunc(target, methodName, callback)
+	local original = target[methodName]
+	target[methodName] = function(...)
+		local results = { original(...) }
+		callback(...)
+		local unpackValues = table.unpack or unpack
+		return unpackValues(results)
+	end
+end
+
 function UnitIsFriend(_, unit)
 	return nameplateUnitInfo[unit] and nameplateUnitInfo[unit].friendly or false
 end
@@ -831,6 +854,7 @@ equal(HTF:GetSetting("friendlyNamesOnly"), false, "friendly names-only mode defa
 equal(HTF:GetSetting("friendlyNameClassColors"), false, "friendly name class colors default off")
 equal(HTF:GetSetting("friendlyNameCustomFontSize"), false, "friendly custom name size defaults off")
 equal(HTF:GetSetting("friendlyNameFontSize"), 14, "friendly name font size has a safe default")
+check(HTF.FriendlyNames.nameplateOptionsHookInstalled, "friendly nameplate option hook is installed when the nameplate UI is available")
 equal(HTF.db.friendlyNamesOnlySnapshot, nil, "friendly names-only mode has no default snapshot")
 equal(HTF:GetSetting("statsLocked"), true, "stats overlay defaults locked")
 equal(HTF:GetSetting("statsFontSize"), 15, "stats overlay default font size")
@@ -1029,9 +1053,13 @@ equal(accessibleFriendlyNameplate.UnitFrame.name.textColor[3], 0.04, "class colo
 HTF:SetSetting("friendlyNameClassColors", false)
 flushTimers()
 equal(accessibleFriendlyNameplate.UnitFrame.name.textColor[2], 1, "turning class colors off refreshes visible friendly nameplates")
+equal(NamePlateFriendlyFrameOptions.nameMouseoverColor, initialFriendlyMouseoverColor, "turning class colors off restores the friendly-name mouseover color")
 HTF:SetSetting("friendlyNameClassColors", true)
 flushTimers()
 equal(accessibleFriendlyNameplate.UnitFrame.name.textColor[2], 0.49, "turning class colors on refreshes visible friendly nameplates")
+equal(NamePlateFriendlyFrameOptions.nameMouseoverColor, nil, "class colors suppress the friendly-name mouseover color override")
+NamePlateDriverMixin.UpdateNamePlateOptions()
+equal(NamePlateFriendlyFrameOptions.nameMouseoverColor, nil, "nameplate option updates retain the class-color mouseover policy")
 
 local fallbackFriendlyNameplate = CreateFrame("Frame", nil, UIParent)
 fallbackFriendlyNameplate.UnitFrame = CreateFrame("Frame", nil, fallbackFriendlyNameplate)
@@ -1081,6 +1109,7 @@ equal(cvarValues[friendlyPlayerNamesCVar], "0", "disabling restores the original
 equal(cvarValues[friendlyPlayerNameplatesCVar], "1", "disabling restores the original friendly nameplate setting")
 equal(cvarValues[friendlyPlayerNamesOnlyCVar], "0", "disabling restores the original native names-only setting")
 equal(cvarValues[friendlyPlayerClassColorsCVar], "0", "disabling restores the original class-color setting")
+equal(NamePlateFriendlyFrameOptions.nameMouseoverColor, updatedFriendlyMouseoverColor, "disabling restores the latest game mouseover color setting")
 local _, disabledNameplateFontSize = SystemFont_NamePlate:GetFont()
 local _, disabledOutlinedNameplateFontSize = SystemFont_NamePlate_Outlined:GetFont()
 equal(disabledNameplateFontSize, 12, "disabling friendly names restores the standard nameplate font")

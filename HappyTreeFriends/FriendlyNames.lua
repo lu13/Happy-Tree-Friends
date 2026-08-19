@@ -351,6 +351,25 @@ function FriendlyNames:GetClassColor(unit)
 	return r, g, b
 end
 
+function FriendlyNames:ApplyClassColorToNameplate(unit, name)
+	if not HTF:GetSetting("friendlyNamesOnly") or not HTF:GetSetting("friendlyNameClassColors")
+		or not self:IsFriendlyPlayerNameplate(unit) then
+		return false
+	end
+
+	local r, g, b = self:GetClassColor(unit)
+	if not r then
+		return false
+	end
+	local colorOk, colorResult = pcall(function()
+		if not name or type(name.SetTextColor) ~= "function" then
+			return false
+		end
+		return name:SetTextColor(r, g, b, 1)
+	end)
+	return colorOk and colorResult ~= false
+end
+
 function FriendlyNames:RefreshClassColorForNameplate(unit)
 	if not self:IsFriendlyPlayerNameplate(unit) then
 		return false
@@ -372,17 +391,7 @@ function FriendlyNames:RefreshClassColorForNameplate(unit)
 	if not HTF:GetSetting("friendlyNamesOnly") or not HTF:GetSetting("friendlyNameClassColors") then
 		return refreshed
 	end
-	local r, g, b = self:GetClassColor(unit)
-	if not r then
-		return refreshed
-	end
-	local colorOk, colorResult = pcall(function()
-		if not name or type(name.SetTextColor) ~= "function" then
-			return false
-		end
-		return name:SetTextColor(r, g, b, 1)
-	end)
-	return (colorOk and colorResult ~= false) or refreshed
+	return self:ApplyClassColorToNameplate(unit, name) or refreshed
 end
 
 function FriendlyNames:RefreshVisibleClassColors()
@@ -422,6 +431,65 @@ function FriendlyNames:ScheduleClassColorRefresh()
 	else
 		refresh()
 	end
+end
+
+-- Blizzard applies the friendly-name mouseover color before class colors.
+function FriendlyNames:ApplyClassColorMouseoverPolicy(refreshSnapshot)
+	if type(NamePlateFriendlyFrameOptions) ~= "table" then
+		return false
+	end
+
+	local preserveClassColor = HTF:GetSetting("friendlyNamesOnly") and HTF:GetSetting("friendlyNameClassColors")
+	if preserveClassColor then
+		local classColorValue, classColorSupported = self:GetCVarValue(FRIENDLY_PLAYER_CLASS_COLORS_CVAR)
+		preserveClassColor = classColorSupported and classColorValue == "1"
+	end
+	if preserveClassColor then
+		local readOk, mouseoverColor = pcall(function()
+			return NamePlateFriendlyFrameOptions.nameMouseoverColor
+		end)
+		if not readOk or HTF:IsSecretValue(mouseoverColor) then
+			return false
+		end
+		if refreshSnapshot or not self.nameMouseoverColorSnapshotCaptured then
+			self.nameMouseoverColorSnapshot = mouseoverColor
+			self.nameMouseoverColorSnapshotCaptured = true
+		end
+		local clearOk = pcall(function()
+			NamePlateFriendlyFrameOptions.nameMouseoverColor = nil
+		end)
+		return clearOk
+	end
+
+	if not self.nameMouseoverColorSnapshotCaptured then
+		return true
+	end
+	local restoreOk = pcall(function()
+		NamePlateFriendlyFrameOptions.nameMouseoverColor = self.nameMouseoverColorSnapshot
+	end)
+	if restoreOk then
+		self.nameMouseoverColorSnapshot = nil
+		self.nameMouseoverColorSnapshotCaptured = false
+	end
+	return restoreOk
+end
+
+function FriendlyNames:InstallNameplateOptionsHook()
+	if self.nameplateOptionsHookInstalled then
+		return true
+	end
+	if type(hooksecurefunc) ~= "function" or type(NamePlateDriverMixin) ~= "table"
+		or type(NamePlateDriverMixin.UpdateNamePlateOptions) ~= "function" then
+		return false
+	end
+
+	local hookOk = pcall(hooksecurefunc, NamePlateDriverMixin, "UpdateNamePlateOptions", function()
+		self:ApplyClassColorMouseoverPolicy(true)
+	end)
+	if hookOk then
+		self.nameplateOptionsHookInstalled = true
+	end
+	return hookOk
 end
 
 function FriendlyNames:GetSnapshot()
@@ -523,6 +591,7 @@ function FriendlyNames:Apply()
 	success = nameplatesSuccess and success
 	changed = nameplatesChanged or changed
 	self.changingCVars = false
+	self:ApplyClassColorMouseoverPolicy()
 	self:ApplyFontSize()
 	self:ScheduleClassColorRefresh()
 
@@ -535,6 +604,7 @@ end
 function FriendlyNames:Restore()
 	local snapshot = self:GetSnapshot()
 	if not snapshot then
+		self:ApplyClassColorMouseoverPolicy()
 		return self:RestoreFontSize()
 	end
 
@@ -548,6 +618,7 @@ function FriendlyNames:Restore()
 		end
 	end
 	self.changingCVars = false
+	self:ApplyClassColorMouseoverPolicy()
 	success = self:RestoreFontSize() and success
 	self:ScheduleClassColorRefresh()
 
@@ -627,6 +698,7 @@ function FriendlyNames:OnEvent(event, cvarName)
 	end
 
 	if event == "PLAYER_ENTERING_WORLD" then
+		self:InstallNameplateOptionsHook()
 		self:ScheduleSynchronize()
 		self:ScheduleFontRefresh()
 	end
@@ -656,5 +728,6 @@ function FriendlyNames:Initialize()
 	self.eventFrame:SetScript("OnEvent", function(_, event, ...)
 		self:OnEvent(event, ...)
 	end)
+	self:InstallNameplateOptionsHook()
 	self:Synchronize()
 end
