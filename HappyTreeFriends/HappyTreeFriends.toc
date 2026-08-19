@@ -3,7 +3,7 @@
 ## Notes: An event-driven WoW Retail toolkit with safe merchant automation, a session ledger, friendly names, and a customizable adventure HUD.
 ## Notes-zhCN: 事件驱动的正式服日常工具：安全修理/售灰装、会话账本、友方仅姓名和可定制冒险状态悬浮层。
 ## Author: Happy Tree Friends
-## Version: 0.6.0
+## Version: 0.6.1
 ## SavedVariables: HappyTreeFriendsDB
 
 Locales.lua
