@@ -9,7 +9,7 @@ Happy Tree Friends is a lightweight quality-of-life toolkit for **World of Warcr
 - Session tracking for repair costs and junk-sale income
 - A movable, resizable, lockable HUD for character stats, durability, bag space, money, and latency
 - Independent visibility, font-size, and color controls for HUD values
-- Friendly-player name-only mode with optional class colors and custom font size
+- Friendly-player name-only mode with a custom font-size option
 - A clean standalone settings window
 - English and Simplified Chinese localization, debug logs, and copyable diagnostics
 

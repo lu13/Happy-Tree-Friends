@@ -12,7 +12,7 @@ Happy Tree Friends is a lightweight quality-of-life addon for **World of Warcraf
 - **Session ledger** — Review repair spending, junk-sale income, and protected items skipped during the current session.
 - **Adventure HUD** — Display character stats, durability, free bag slots, money, and latency in a movable, resizable, lockable transparent overlay.
 - **Flexible HUD styling** — Show or hide each value and customize its font size and color.
-- **Friendly names** — Show friendly players as names only, with optional class colors and a custom font size.
+- **Friendly names** — Show friendly players as names only, with an optional custom font size.
 - **Standalone settings** — Open a clean, movable HTF settings window directly with `/htf`.
 - **Diagnostics** — English and Simplified Chinese localization, optional debug logging, and a copyable diagnostic report.
 

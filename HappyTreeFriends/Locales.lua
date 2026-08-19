@@ -53,8 +53,6 @@ local locales = {
 		JUNK_PROTECTION_LIST = "Protected junk item IDs: %s",
 		FRIENDLY_NAMES_ONLY = "Friendly Names Only",
 		FRIENDLY_NAMES_ONLY_DESC = "Show friendly player names while hiding their health bars, cast bars, auras, and other nameplate details.",
-		FRIENDLY_NAME_CLASS_COLORS = "Class-Color Names",
-		FRIENDLY_NAME_CLASS_COLORS_DESC = "Color friendly player names by class while Friendly Names Only is enabled.",
 		FRIENDLY_NAME_CUSTOM_FONT_SIZE = "Custom Name Size",
 		FRIENDLY_NAME_CUSTOM_FONT_SIZE_DESC = "Use your chosen font size for friendly player names.",
 		FRIENDLY_NAME_FONT_SIZE = "Name Font Size",
@@ -164,8 +162,6 @@ local locales = {
 		DEBUG_FRIENDLY_NAMES_APPLIED = "Friendly Names Only applied its managed game settings.",
 		DEBUG_FRIENDLY_NAMES_RESTORED = "Friendly Names Only restored the previous friendly-name settings.",
 		DEBUG_FRIENDLY_NAMES_CVAR_FAILED = "Friendly Names Only could not update %s; it will retry later.",
-		DEBUG_FRIENDLY_NAMES_MOUSEOVER_TRACE = "Friendly-name trace: action=%s, unit=%s, before=%s, applied=%s, after=%s, classState=%s.",
-		DEBUG_FRIENDLY_NAMES_MOUSEOVER_AFTER = "Friendly-name follow-up: unit=%s, color=%s, expected=%s.",
 	},
 	zhCN = {
 		ADDON_NAME = "Happy Tree Friends",
@@ -219,8 +215,6 @@ local locales = {
 		JUNK_PROTECTION_LIST = "已保护的灰装物品 ID：%s",
 		FRIENDLY_NAMES_ONLY = "友方仅姓名模式",
 		FRIENDLY_NAMES_ONLY_DESC = "显示友方玩家姓名，同时隐藏血条、施法条、光环和其他姓名板信息。",
-		FRIENDLY_NAME_CLASS_COLORS = "职业颜色姓名",
-		FRIENDLY_NAME_CLASS_COLORS_DESC = "开启友方仅姓名模式时，按职业颜色显示友方玩家姓名。",
 		FRIENDLY_NAME_CUSTOM_FONT_SIZE = "自定义姓名字号",
 		FRIENDLY_NAME_CUSTOM_FONT_SIZE_DESC = "使用你选择的友方玩家姓名字号。",
 		FRIENDLY_NAME_FONT_SIZE = "友方姓名字号",
@@ -330,8 +324,6 @@ local locales = {
 		DEBUG_FRIENDLY_NAMES_APPLIED = "友方仅姓名模式已应用所管理的游戏设置。",
 		DEBUG_FRIENDLY_NAMES_RESTORED = "友方仅姓名模式已恢复原友方姓名设置。",
 		DEBUG_FRIENDLY_NAMES_CVAR_FAILED = "友方仅姓名模式无法更新 %s，稍后会重试。",
-		DEBUG_FRIENDLY_NAMES_MOUSEOVER_TRACE = "友方姓名追踪：动作=%s，单位=%s，补色前=%s，补色成功=%s，补色后=%s，内部职业色状态=%s。",
-		DEBUG_FRIENDLY_NAMES_MOUSEOVER_AFTER = "友方姓名后续检查：单位=%s，当前颜色=%s，预期职业色=%s。",
 	},
 }
 

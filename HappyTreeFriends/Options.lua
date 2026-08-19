@@ -477,8 +477,7 @@ end
 function Options:CreateNameplatesPage(page)
 	self:AddPageHeader(page, HTF.L.NAMEPLATES, HTF.L.NAMEPLATES_PAGE_HELP)
 	self:CreateToggleRow(page, -96, "friendlyNamesOnly", HTF.L.FRIENDLY_NAMES_ONLY, HTF.L.FRIENDLY_NAMES_ONLY_DESC)
-	self.friendlyNameClassColorToggleRow = self:CreateCompactToggleRow(page, "left", -180, "friendlyNameClassColors", HTF.L.FRIENDLY_NAME_CLASS_COLORS, HTF.L.FRIENDLY_NAME_CLASS_COLORS_DESC)
-	self.friendlyNameFontToggleRow = self:CreateCompactToggleRow(page, "right", -180, "friendlyNameCustomFontSize", HTF.L.FRIENDLY_NAME_CUSTOM_FONT_SIZE, HTF.L.FRIENDLY_NAME_CUSTOM_FONT_SIZE_DESC)
+	self.friendlyNameFontToggleRow = self:CreateCompactToggleRow(page, "left", -180, "friendlyNameCustomFontSize", HTF.L.FRIENDLY_NAME_CUSTOM_FONT_SIZE, HTF.L.FRIENDLY_NAME_CUSTOM_FONT_SIZE_DESC)
 
 	local controlCard = CreateFrame("Frame", nil, page, "BackdropTemplate")
 	controlCard:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -250)

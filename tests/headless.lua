@@ -199,20 +199,6 @@ function objectMethods:SetTextColor(r, g, b, a)
 	self.textColor = { r, g, b, a }
 end
 
-function objectMethods:GetTextColor()
-	local color = self.textColor or { 1, 1, 1, 1 }
-	return color[1], color[2], color[3], color[4]
-end
-
-function objectMethods:SetVertexColor(r, g, b, a)
-	self.vertexColor = { r, g, b, a }
-end
-
-function objectMethods:GetVertexColor()
-	local color = self.vertexColor or self.textColor or { 1, 1, 1, 1 }
-	return color[1], color[2], color[3], color[4]
-end
-
 function objectMethods:SetColorTexture(r, g, b, a)
 	self.textureColor = { r, g, b, a }
 end
@@ -412,50 +398,7 @@ C_NamePlate = {
 	GetNamePlateForUnit = function(unit)
 		return mockNamePlates[unit]
 	end,
-	GetNamePlates = function()
-		local namePlates = {}
-		for _, namePlate in pairs(mockNamePlates) do
-			table.insert(namePlates, namePlate)
-		end
-		return namePlates
-	end,
 }
-
-local initialFriendlyMouseoverColor = { r = 1, g = 1, b = 0 }
-local updatedFriendlyMouseoverColor
-NamePlateFriendlyFrameOptions = {
-	nameMouseoverColor = initialFriendlyMouseoverColor,
-}
-
-NamePlateDriverMixin = {
-	UpdateNamePlateOptions = function()
-		updatedFriendlyMouseoverColor = { r = 1, g = 1, b = 0 }
-		NamePlateFriendlyFrameOptions.nameMouseoverColor = updatedFriendlyMouseoverColor
-	end,
-}
-
-function CompactUnitFrame_OnEvent(unitFrame, event)
-	if event == "UPDATE_MOUSEOVER_UNIT" and unitFrame.name then
-		unitFrame.name:SetVertexColor(1, 1, 1, 1)
-		unitFrame.colorNameWithClassColor = false
-	end
-end
-
-function hooksecurefunc(target, methodName, callback)
-	local owner = target
-	if type(target) == "string" then
-		callback = methodName
-		owner = _G
-		methodName = target
-	end
-	local original = owner[methodName]
-	owner[methodName] = function(...)
-		local results = { original(...) }
-		callback(...)
-		local unpackValues = table.unpack or unpack
-		return unpackValues(results)
-	end
-end
 
 function UnitIsFriend(_, unit)
 	return nameplateUnitInfo[unit] and nameplateUnitInfo[unit].friendly or false
@@ -463,14 +406,6 @@ end
 
 function UnitIsPlayer(unit)
 	return nameplateUnitInfo[unit] and nameplateUnitInfo[unit].player or false
-end
-
-local mouseoverUnit
-function UnitIsUnit(unit, otherUnit)
-	if otherUnit == "mouseover" then
-		return unit == mouseoverUnit
-	end
-	return unit == otherUnit
 end
 
 local combatLocked = false
@@ -658,15 +593,7 @@ function UnitName()
 	return secretIdentity and SECRET or "Tester"
 end
 
-RAID_CLASS_COLORS = {
-	DRUID = { r = 1, g = 0.49, b = 0.04 },
-}
-
-function UnitClass(unit)
-	local unitInfo = nameplateUnitInfo[unit]
-	if unitInfo and unitInfo.classToken then
-		return unitInfo.classToken, unitInfo.classToken, 11
-	end
+function UnitClass()
 	local localizedClass = testLocale == "zhCN" and "德鲁伊" or "Druid"
 	return secretIdentity and SECRET or localizedClass, "DRUID", 11
 end
@@ -807,7 +734,7 @@ function ColorPickerFrame:GetColorRGB()
 	return self.r, self.g, self.b
 end
 
-HappyTreeFriendsDB = { debugLog = {} }
+HappyTreeFriendsDB = { debugLog = {}, friendlyNameClassColors = true }
 for index = 1, 82 do
 	if index == 10 then
 		HappyTreeFriendsDB.debugLog[index] = false
@@ -874,8 +801,6 @@ local formatCases = {
 	DEBUG_STATS_POSITION_SAVED = { "TOP", "TOP", 1, -1 },
 	DEBUG_STAT_VISIBILITY_UPDATED = { "haste", "true" },
 	DEBUG_FRIENDLY_NAMES_CVAR_FAILED = { friendlyPlayerNamesCVar },
-	DEBUG_FRIENDLY_NAMES_MOUSEOVER_TRACE = { "UPDATE_MOUSEOVER_UNIT", "nameplate1", "1,1,1", "true", "1,0,0", "true" },
-	DEBUG_FRIENDLY_NAMES_MOUSEOVER_AFTER = { "nameplate1", "1,0,0", "1,0,0" },
 }
 local unpackValues = table.unpack or unpack
 for key, arguments in pairs(formatCases) do
@@ -890,11 +815,9 @@ equal(HTF:GetSetting("repairFromGuild"), false, "guild repair defaults off")
 equal(HTF:GetSetting("autoSellJunk"), false, "auto sell defaults off")
 check(type(HTF:GetSetting("protectedJunkItems")) == "table", "protected junk item IDs default to an empty table")
 equal(HTF:GetSetting("friendlyNamesOnly"), false, "friendly names-only mode defaults off")
-equal(HTF:GetSetting("friendlyNameClassColors"), false, "friendly name class colors default off")
+equal(HTF:GetSetting("friendlyNameClassColors"), nil, "removed friendly name class-color setting is cleared")
 equal(HTF:GetSetting("friendlyNameCustomFontSize"), false, "friendly custom name size defaults off")
 equal(HTF:GetSetting("friendlyNameFontSize"), 14, "friendly name font size has a safe default")
-check(HTF.FriendlyNames.nameplateOptionsHookInstalled, "friendly nameplate option hook is installed when the nameplate UI is available")
-check(HTF.FriendlyNames.nameplateMouseoverHookInstalled, "friendly nameplate mouseover hook is installed when the nameplate UI is available")
 equal(HTF.db.friendlyNamesOnlySnapshot, nil, "friendly names-only mode has no default snapshot")
 equal(HTF:GetSetting("statsLocked"), true, "stats overlay defaults locked")
 equal(HTF:GetSetting("statsFontSize"), 15, "stats overlay default font size")
@@ -1002,20 +925,17 @@ equal(#statusTitle.points, 2, "overview width reference spans the content card")
 HTF:HandleSlashCommand("nameplates")
 check(HTF.Options:IsPageVisible("nameplates"), "/htf nameplates opens the friendly names page")
 local friendlyNamesToggleRow
-local friendlyNameClassColorsToggleRow
 local friendlyNameFontToggleRow
 for _, row in ipairs(HTF.Options.toggles) do
 	if row.settingKey == "friendlyNamesOnly" then
 		friendlyNamesToggleRow = row
-	elseif row.settingKey == "friendlyNameClassColors" then
-		friendlyNameClassColorsToggleRow = row
 	elseif row.settingKey == "friendlyNameCustomFontSize" then
 		friendlyNameFontToggleRow = row
 	end
 end
 check(friendlyNamesToggleRow ~= nil, "friendly names page exposes its mode toggle")
-check(friendlyNameClassColorsToggleRow ~= nil, "friendly names page exposes its class-color toggle")
 check(friendlyNameFontToggleRow ~= nil, "friendly names page exposes its custom-size toggle")
+check(HTF.Options.friendlyNameClassColorToggleRow == nil, "friendly names page omits the removed class-color toggle")
 equal(HTF.Options.friendlyNameFontValue:GetText(), "14", "friendly names page displays the default name font size")
 
 cvarValues[friendlyPlayerNamesCVar] = "0"
@@ -1029,13 +949,15 @@ equal(HTF:GetSetting("friendlyNamesOnly"), true, "friendly names-only mode enabl
 equal(cvarValues[friendlyPlayerNamesCVar], "1", "friendly player names are enabled")
 equal(cvarValues[friendlyPlayerNameplatesCVar], "1", "friendly player nameplates remain enabled with native names-only support")
 equal(cvarValues[friendlyPlayerNamesOnlyCVar], "1", "native friendly names-only mode is enabled")
-equal(cvarValues[friendlyPlayerClassColorsCVar], "0", "class colors remain opt-in")
+equal(cvarValues[friendlyPlayerClassColorsCVar], "0", "friendly names-only mode leaves name class colors unchanged")
+equal(cvarValues[friendlyHealthClassColorsCVar], "0", "friendly names-only mode leaves health-bar class colors unchanged")
 local friendlyNamesSnapshot = HTF.db.friendlyNamesOnlySnapshot
 check(type(friendlyNamesSnapshot) == "table", "friendly settings are snapshotted before applying the mode")
 equal(friendlyNamesSnapshot[friendlyPlayerNamesCVar], "0", "snapshot retains the original friendly name setting")
 equal(friendlyNamesSnapshot[friendlyPlayerNameplatesCVar], "1", "snapshot retains the original friendly nameplate setting")
 equal(friendlyNamesSnapshot[friendlyPlayerNamesOnlyCVar], "0", "snapshot retains the original native names-only setting")
-equal(friendlyNamesSnapshot[friendlyPlayerClassColorsCVar], "0", "snapshot retains the original class-color setting")
+equal(friendlyNamesSnapshot[friendlyPlayerClassColorsCVar], nil, "new snapshots do not manage name class colors")
+equal(friendlyNamesSnapshot[friendlyHealthClassColorsCVar], nil, "new snapshots do not manage health-bar class colors")
 equal(friendlyNamesToggleRow.toggle.state:GetText(), HTF.L.TOGGLE_ON, "friendly names toggle refreshes after enabling")
 
 local cvarCallsBeforeUnrelatedUpdate = #cvarSetCalls
@@ -1049,20 +971,16 @@ flushTimers()
 equal(cvarValues[friendlyPlayerNameplatesCVar], "1", "managed CVar changes are corrected while the mode is enabled")
 check(HTF.db.friendlyNamesOnlySnapshot == friendlyNamesSnapshot, "reapplying the mode never overwrites the original snapshot")
 
-HTF:SetSetting("friendlyNameClassColors", true)
-equal(cvarValues[friendlyPlayerClassColorsCVar], "1", "class-color setting uses the native friendly-name CVar")
-equal(cvarValues[friendlyHealthClassColorsCVar], "0", "friendly-name class colors do not alter friendly health-bar class colors")
-equal(friendlyNameClassColorsToggleRow.toggle.dot.points[1][1], "RIGHT", "class-color toggle refreshes after enabling")
-
-friendlyNamesSnapshot[friendlyPlayerClassColorsCVar] = nil
+friendlyNamesSnapshot[friendlyPlayerClassColorsCVar] = "1"
 friendlyNamesSnapshot[friendlyHealthClassColorsCVar] = "0"
+cvarValues[friendlyPlayerClassColorsCVar] = "1"
 cvarValues[friendlyHealthClassColorsCVar] = "1"
+HTF.FriendlyNames.removedClassColorsActive = true
 HTF.FriendlyNames:Synchronize()
+equal(cvarValues[friendlyPlayerClassColorsCVar], "0", "removed class-color mode is switched off for affected users")
 equal(cvarValues[friendlyHealthClassColorsCVar], "0", "0.6.0 migration restores the original friendly health-bar class-color value")
-equal(friendlyNamesSnapshot[friendlyHealthClassColorsCVar], nil, "0.6.0 migration removes the erroneous health-bar snapshot")
-equal(cvarValues[friendlyPlayerClassColorsCVar], "1", "0.6.0 migration reapplies the correct friendly-name class-color CVar")
-equal(friendlyNamesSnapshot[friendlyPlayerClassColorsCVar], "1", "0.6.0 migration preserves the safest available name-color restoration value")
-friendlyNamesSnapshot[friendlyPlayerClassColorsCVar] = "0"
+equal(friendlyNamesSnapshot[friendlyPlayerClassColorsCVar], nil, "migration removes the old name-color snapshot")
+equal(friendlyNamesSnapshot[friendlyHealthClassColorsCVar], nil, "migration removes the erroneous health-bar snapshot")
 
 HTF.FriendlyNames:SetFontSize(19)
 equal(HTF:GetSetting("friendlyNameFontSize"), 19, "friendly name font size persists in settings")
@@ -1084,73 +1002,11 @@ local accessibleFriendlyNameplate = CreateFrame("Frame", nil, UIParent)
 accessibleFriendlyNameplate.UnitFrame = CreateFrame("Frame", nil, accessibleFriendlyNameplate)
 accessibleFriendlyNameplate.UnitFrame.name = CreateFrame("FontString", nil, accessibleFriendlyNameplate.UnitFrame)
 accessibleFriendlyNameplate.UnitFrame.name:SetFont("PerPlateFont", 12, "OUTLINE")
-accessibleFriendlyNameplate.UnitFrame.UpdateNameClassColor = function(unitFrame)
-	if cvarValues[friendlyPlayerClassColorsCVar] == "1" then
-		unitFrame.name:SetVertexColor(1, 0.49, 0.04, 1)
-	else
-		unitFrame.name:SetVertexColor(1, 1, 1, 1)
-	end
-end
 mockNamePlates.nameplate1 = accessibleFriendlyNameplate
-accessibleFriendlyNameplate.UnitFrame.unit = "nameplate1"
-nameplateUnitInfo.nameplate1 = { friendly = true, player = true, classToken = "DRUID" }
+nameplateUnitInfo.nameplate1 = { friendly = true, player = true }
 fireEvent("NAME_PLATE_UNIT_ADDED", "nameplate1")
 local _, accessibleFriendlyNameSize = accessibleFriendlyNameplate.UnitFrame.name:GetFont()
 equal(accessibleFriendlyNameSize, 19, "new accessible friendly nameplates receive the selected font size")
-equal(accessibleFriendlyNameplate.UnitFrame.name.vertexColor[1], 1, "new accessible friendly nameplates receive their class color")
-equal(accessibleFriendlyNameplate.UnitFrame.name.vertexColor[2], 0.49, "class color uses the unit class green component")
-equal(accessibleFriendlyNameplate.UnitFrame.name.vertexColor[3], 0.04, "class color uses the unit class blue component")
-
-HTF:SetSetting("friendlyNameClassColors", false)
-flushTimers()
-equal(accessibleFriendlyNameplate.UnitFrame.name.vertexColor[2], 1, "turning class colors off refreshes visible friendly nameplates")
-equal(NamePlateFriendlyFrameOptions.nameMouseoverColor, initialFriendlyMouseoverColor, "turning class colors off restores the friendly-name mouseover color")
-mouseoverUnit = "nameplate1"
-CompactUnitFrame_OnEvent(accessibleFriendlyNameplate.UnitFrame, "UPDATE_MOUSEOVER_UNIT")
-equal(accessibleFriendlyNameplate.UnitFrame.name.vertexColor[2], 1, "mouseover hook leaves class colors disabled")
-HTF:SetSetting("friendlyNameClassColors", true)
-flushTimers()
-equal(accessibleFriendlyNameplate.UnitFrame.name.vertexColor[2], 0.49, "turning class colors on refreshes visible friendly nameplates")
-equal(NamePlateFriendlyFrameOptions.nameMouseoverColor, nil, "class colors suppress the friendly-name mouseover color override")
-CompactUnitFrame_OnEvent(accessibleFriendlyNameplate.UnitFrame, "UPDATE_MOUSEOVER_UNIT")
-equal(accessibleFriendlyNameplate.UnitFrame.name.vertexColor[2], 0.49, "mouseover redraw restores the friendly player's class color")
-check(accessibleFriendlyNameplate.UnitFrame.colorNameWithClassColor, "mouseover refresh preserves the native class-color state")
-
-HTF.db.debug = true
-CompactUnitFrame_OnEvent(accessibleFriendlyNameplate.UnitFrame, "UPDATE_MOUSEOVER_UNIT")
-flushTimers()
-contains(HTF.debugLog[#HTF.debugLog - 1], "UPDATE_MOUSEOVER_UNIT", "debug mode records the mouseover redraw action")
-contains(HTF.debugLog[#HTF.debugLog], "nameplate1", "debug mode records the post-event friendly-name color check")
-HTF.db.debug = false
-
-local enemyMouseoverNameplate = CreateFrame("Frame", nil, UIParent)
-enemyMouseoverNameplate.name = CreateFrame("FontString", nil, enemyMouseoverNameplate)
-enemyMouseoverNameplate.unit = "nameplateEnemy"
-nameplateUnitInfo.nameplateEnemy = { friendly = false, player = true, classToken = "DRUID" }
-mouseoverUnit = "nameplateEnemy"
-CompactUnitFrame_OnEvent(enemyMouseoverNameplate, "UPDATE_MOUSEOVER_UNIT")
-check(not enemyMouseoverNameplate.colorNameWithClassColor, "friendly class-color hover handling does not modify enemy nameplates")
-equal(enemyMouseoverNameplate.name.vertexColor[2], 1, "enemy mouseover color remains controlled by the game")
-mouseoverUnit = nil
-NamePlateDriverMixin.UpdateNamePlateOptions()
-equal(NamePlateFriendlyFrameOptions.nameMouseoverColor, nil, "nameplate option updates retain the class-color mouseover policy")
-
-local fallbackFriendlyNameplate = CreateFrame("Frame", nil, UIParent)
-fallbackFriendlyNameplate.UnitFrame = CreateFrame("Frame", nil, fallbackFriendlyNameplate)
-fallbackFriendlyNameplate.UnitFrame.name = CreateFrame("FontString", nil, fallbackFriendlyNameplate.UnitFrame)
-mockNamePlates.nameplate3 = fallbackFriendlyNameplate
-fallbackFriendlyNameplate.UnitFrame.unit = "nameplate3"
-nameplateUnitInfo.nameplate3 = { friendly = true, player = true, classToken = "DRUID" }
-fireEvent("NAME_PLATE_UNIT_ADDED", "nameplate3")
-equal(fallbackFriendlyNameplate.UnitFrame.name.vertexColor[2], 0.49, "class-color fallback updates accessible nameplates without a native refresh method")
-
-local secretClassNameplate = CreateFrame("Frame", nil, UIParent)
-secretClassNameplate.UnitFrame = CreateFrame("Frame", nil, secretClassNameplate)
-secretClassNameplate.UnitFrame.name = CreateFrame("FontString", nil, secretClassNameplate.UnitFrame)
-mockNamePlates.nameplate4 = secretClassNameplate
-nameplateUnitInfo.nameplate4 = { friendly = true, player = true, classToken = SECRET }
-local secretClassOk = pcall(HTF.FriendlyNames.RefreshClassColorForNameplate, HTF.FriendlyNames, "nameplate4")
-check(secretClassOk, "restricted class values do not break friendly-name color refreshes")
 
 nameplateUnitInfo.nameplate2 = { friendly = true, player = true }
 fireEvent("NAME_PLATE_UNIT_ADDED", "nameplate2")
@@ -1178,19 +1034,27 @@ check(HTF.FriendlyNames.fontSnapshot == nil, "turning custom name size off clear
 
 HTF:SetSetting("friendlyNameCustomFontSize", true)
 flushTimers()
+friendlyNamesSnapshot[friendlyHealthClassColorsCVar] = "0"
+cvarValues[friendlyHealthClassColorsCVar] = "1"
+cvarSetFailures[friendlyHealthClassColorsCVar] = true
 HTF:SetSetting("friendlyNamesOnly", false)
 equal(cvarValues[friendlyPlayerNamesCVar], "0", "disabling restores the original friendly name setting")
 equal(cvarValues[friendlyPlayerNameplatesCVar], "1", "disabling restores the original friendly nameplate setting")
 equal(cvarValues[friendlyPlayerNamesOnlyCVar], "0", "disabling restores the original native names-only setting")
-equal(cvarValues[friendlyPlayerClassColorsCVar], "0", "disabling restores the original class-color setting")
-equal(NamePlateFriendlyFrameOptions.nameMouseoverColor, updatedFriendlyMouseoverColor, "disabling restores the latest game mouseover color setting")
+equal(cvarValues[friendlyPlayerClassColorsCVar], "0", "disabling names-only leaves removed name colors untouched")
+equal(cvarValues[friendlyHealthClassColorsCVar], "1", "failed legacy health-color restoration remains pending")
 local _, disabledNameplateFontSize = SystemFont_NamePlate:GetFont()
 local _, disabledOutlinedNameplateFontSize = SystemFont_NamePlate_Outlined:GetFont()
 equal(disabledNameplateFontSize, 12, "disabling friendly names restores the standard nameplate font")
 equal(disabledOutlinedNameplateFontSize, 13, "disabling friendly names restores the outlined nameplate font")
+check(type(HTF.db.friendlyNamesOnlySnapshot) == "table", "failed legacy color restoration retains the saved snapshot")
+equal(HTF.db.friendlyNamesOnlySnapshot[friendlyHealthClassColorsCVar], "0", "pending health-color restoration keeps its original value")
+cvarSetFailures[friendlyHealthClassColorsCVar] = nil
+fireEvent("PLAYER_ENTERING_WORLD")
+flushTimers()
+equal(cvarValues[friendlyHealthClassColorsCVar], "0", "pending health-color restoration retries after entering the world")
 equal(HTF.db.friendlyNamesOnlySnapshot, nil, "successful restoration clears the saved snapshot")
 equal(friendlyNamesToggleRow.toggle.state:GetText(), HTF.L.TOGGLE_OFF, "friendly names toggle refreshes after disabling")
-HTF:SetSetting("friendlyNameClassColors", false)
 HTF:SetSetting("friendlyNameCustomFontSize", false)
 HTF.FriendlyNames:SetFontSize(14)
 
@@ -1286,11 +1150,8 @@ equal(leftToggle.points[2][3], "TOP", "left stats toggle ends at the content mid
 equal(rightToggle.points[1][3], "TOP", "right stats toggle starts at the content midpoint")
 equal(rightToggle.points[2][3], "TOPRIGHT", "right stats toggle ends at the content edge")
 
-local friendlyClassColorToggle = HTF.Options.friendlyNameClassColorToggleRow
 local friendlyFontToggle = HTF.Options.friendlyNameFontToggleRow
-equal(friendlyClassColorToggle.width, nil, "friendly class-color toggle does not use a fixed width")
 equal(friendlyFontToggle.width, nil, "friendly font-size toggle does not use a fixed width")
-equal(#friendlyClassColorToggle.points, 2, "friendly class-color toggle uses responsive anchors")
 equal(#friendlyFontToggle.points, 2, "friendly font-size toggle uses responsive anchors")
 
 local leftStatRow = HTF.Options.statSettingRows.strength
@@ -1781,9 +1642,8 @@ local report = HTF:BuildDiagnosticReport()
 contains(report, "Happy Tree Friends - Diagnostic Report", "diagnostic report header")
 contains(report, "WoW build: 69299", "diagnostic report build")
 contains(report, "repairFromGuild: false", "diagnostic report includes guild repair setting")
-contains(report, "friendlyNamesRuntime:", "diagnostic report includes friendly-name runtime details")
 contains(report, "friendlyNamesOnly: false", "diagnostic report includes friendly names-only setting")
-contains(report, "friendlyNameClassColors: false", "diagnostic report includes friendly name class-color setting")
+check(not report:find("friendlyNameClassColors", 1, true), "diagnostic report omits the removed class-color setting")
 contains(report, "friendlyNameCustomFontSize: false", "diagnostic report includes friendly name custom-size setting")
 contains(report, "friendlyNameFontSize: 14", "diagnostic report includes friendly name font size")
 contains(report, "statsFontSize: 15", "diagnostic report includes HUD font size")
