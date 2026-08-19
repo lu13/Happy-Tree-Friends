@@ -6,7 +6,8 @@ HTF.FriendlyNames = FriendlyNames
 local FRIENDLY_PLAYER_NAMES_CVAR = "UnitNameFriendlyPlayerName"
 local FRIENDLY_PLAYER_NAMEPLATES_CVAR = "nameplateShowFriendlyPlayers"
 local FRIENDLY_PLAYER_NAMES_ONLY_CVAR = "nameplateShowOnlyNameForFriendlyPlayerUnits"
-local FRIENDLY_PLAYER_CLASS_COLORS_CVAR = "nameplateUseClassColorForFriendlyPlayerUnitNames"
+local FRIENDLY_PLAYER_CLASS_COLORS_CVAR = "nameplateShowFriendlyClassColor"
+local LEGACY_FRIENDLY_PLAYER_CLASS_COLORS_CVAR = "nameplateUseClassColorForFriendlyPlayerUnitNames"
 
 local FONT_OBJECT_NAMES = {
 	"SystemFont_NamePlate",
@@ -469,10 +470,6 @@ function FriendlyNames:ApplyMouseoverClassColor(unitFrame)
 		return false
 	end
 
-	local classColorValue, classColorSupported = self:GetCVarValue(FRIENDLY_PLAYER_CLASS_COLORS_CVAR)
-	if not classColorSupported or classColorValue ~= "1" then
-		return false
-	end
 	local beforeColor = HTF:GetSetting("debug") and self:GetNameColorText(name) or nil
 	pcall(function()
 		unitFrame.colorNameWithClassColor = true
@@ -566,10 +563,6 @@ function FriendlyNames:ApplyClassColorMouseoverPolicy(refreshSnapshot)
 	end
 
 	local preserveClassColor = HTF:GetSetting("friendlyNamesOnly") and HTF:GetSetting("friendlyNameClassColors")
-	if preserveClassColor then
-		local classColorValue, classColorSupported = self:GetCVarValue(FRIENDLY_PLAYER_CLASS_COLORS_CVAR)
-		preserveClassColor = classColorSupported and classColorValue == "1"
-	end
 	if preserveClassColor then
 		local readOk, mouseoverColor = pcall(function()
 			return NamePlateFriendlyFrameOptions.nameMouseoverColor
@@ -673,6 +666,16 @@ function FriendlyNames:GetSnapshot()
 		HTF:Debug(HTF.L.DEBUG_FRIENDLY_NAMES_SNAPSHOT_INVALID)
 		return nil
 	end
+
+	-- 12.1 replaced the friendly class-color CVar. Existing HTF snapshots
+	-- contain only the legacy key, which never changed the current nameplates.
+	if snapshot[FRIENDLY_PLAYER_CLASS_COLORS_CVAR] == nil then
+		local currentValue, supported = self:GetCVarValue(FRIENDLY_PLAYER_CLASS_COLORS_CVAR)
+		if supported then
+			snapshot[FRIENDLY_PLAYER_CLASS_COLORS_CVAR] = currentValue
+		end
+	end
+	snapshot[LEGACY_FRIENDLY_PLAYER_CLASS_COLORS_CVAR] = nil
 
 	for _, cvarName in ipairs(MANAGED_CVARS) do
 		if snapshot[cvarName] ~= nil then

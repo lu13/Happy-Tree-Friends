@@ -372,7 +372,8 @@ end
 local friendlyPlayerNamesCVar = "UnitNameFriendlyPlayerName"
 local friendlyPlayerNameplatesCVar = "nameplateShowFriendlyPlayers"
 local friendlyPlayerNamesOnlyCVar = "nameplateShowOnlyNameForFriendlyPlayerUnits"
-local friendlyPlayerClassColorsCVar = "nameplateUseClassColorForFriendlyPlayerUnitNames"
+local friendlyPlayerClassColorsCVar = "nameplateShowFriendlyClassColor"
+local legacyFriendlyPlayerClassColorsCVar = "nameplateUseClassColorForFriendlyPlayerUnitNames"
 local cvarValues = {
 	[friendlyPlayerNamesCVar] = "0",
 	[friendlyPlayerNameplatesCVar] = "0",
@@ -1050,6 +1051,14 @@ check(HTF.db.friendlyNamesOnlySnapshot == friendlyNamesSnapshot, "reapplying the
 HTF:SetSetting("friendlyNameClassColors", true)
 equal(cvarValues[friendlyPlayerClassColorsCVar], "1", "class-color setting uses the native friendly-name CVar")
 equal(friendlyNameClassColorsToggleRow.toggle.dot.points[1][1], "RIGHT", "class-color toggle refreshes after enabling")
+
+friendlyNamesSnapshot[friendlyPlayerClassColorsCVar] = nil
+friendlyNamesSnapshot[legacyFriendlyPlayerClassColorsCVar] = "0"
+cvarValues[friendlyPlayerClassColorsCVar] = "0"
+HTF.FriendlyNames:Synchronize()
+equal(cvarValues[friendlyPlayerClassColorsCVar], "1", "legacy snapshots migrate to the 12.1 friendly class-color CVar")
+equal(friendlyNamesSnapshot[friendlyPlayerClassColorsCVar], "0", "snapshot migration preserves the current 12.1 class-color value")
+equal(friendlyNamesSnapshot[legacyFriendlyPlayerClassColorsCVar], nil, "snapshot migration removes the obsolete class-color CVar")
 
 HTF.FriendlyNames:SetFontSize(19)
 equal(HTF:GetSetting("friendlyNameFontSize"), 19, "friendly name font size persists in settings")
