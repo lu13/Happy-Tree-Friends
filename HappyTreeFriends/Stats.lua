@@ -48,6 +48,12 @@ for _, definition in ipairs(Stats.DISPLAY_DEFINITIONS) do
 	definitionByKey[definition.key] = definition
 end
 
+local PLAYER_UNIT_EVENTS = {
+	UNIT_STATS = true,
+	UNIT_AURA = true,
+	UNIT_SPELL_HASTE = true,
+}
+
 local VALID_POINTS = {
 	TOPLEFT = true,
 	TOP = true,
@@ -215,9 +221,15 @@ function Stats:Initialize()
 	self.eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 	self.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 	self.eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-	self.eventFrame:RegisterEvent("UNIT_STATS")
+	self.eventFrame:RegisterUnitEvent("UNIT_STATS", "player")
+	self.eventFrame:RegisterUnitEvent("UNIT_AURA", "player")
+	self.eventFrame:RegisterUnitEvent("UNIT_SPELL_HASTE", "player")
 	self.eventFrame:RegisterEvent("COMBAT_RATING_UPDATE")
 	self.eventFrame:RegisterEvent("MASTERY_UPDATE")
+	self.eventFrame:RegisterEvent("SPEED_UPDATE")
+	self.eventFrame:RegisterEvent("LIFESTEAL_UPDATE")
+	self.eventFrame:RegisterEvent("AVOIDANCE_UPDATE")
+	self.eventFrame:RegisterEvent("PLAYER_DAMAGE_DONE_MODS")
 	self.eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
 	self.eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 	self.eventFrame:RegisterEvent("UPDATE_INVENTORY_DURABILITY")
@@ -428,11 +440,7 @@ function Stats:OnSettingChanged(key)
 end
 
 function Stats:OnEvent(event, unit)
-	if event == "UNIT_STATS" and unit ~= "player" then
-		return
-	end
-	if event == "PLAYER_REGEN_DISABLED" then
-		self:ShowCombatRestriction()
+	if PLAYER_UNIT_EVENTS[event] and unit ~= "player" then
 		return
 	end
 	self:RequestRefresh()
@@ -782,18 +790,8 @@ function Stats:SetOverlayStatus(text)
 	end
 end
 
-function Stats:ShowCombatRestriction()
-	if self:IsVisible() then
-		self:SetOverlayStatus(HTF.L.STATS_IN_COMBAT)
-	end
-end
-
 function Stats:Refresh()
 	if not self:IsVisible() then
-		return
-	end
-	if InCombatLockdown and InCombatLockdown() then
-		self:ShowCombatRestriction()
 		return
 	end
 

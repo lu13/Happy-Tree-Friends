@@ -55,6 +55,11 @@ function objectMethods:RegisterEvent(event)
 	self.events[event] = true
 end
 
+function objectMethods:RegisterUnitEvent(event, ...)
+	self.events[event] = true
+	self.unitEvents[event] = { ... }
+end
+
 function objectMethods:UnregisterEvent(event)
 	self.events[event] = nil
 end
@@ -280,6 +285,7 @@ local function newObject(kind, name, parent, template)
 		shown = true,
 		scripts = {},
 		events = {},
+		unitEvents = {},
 		points = {},
 		text = "",
 	}, { __index = objectMethods })
@@ -828,6 +834,12 @@ equal(HTF.Stats:GetVisibleAdventureStatusCount(), 0, "adventure status defaults 
 check(HTF.Stats.overlay ~= nil, "stats overlay is created during addon initialization")
 equal(HTF.Stats.overlay:GetName(), "HappyTreeFriendsStatsOverlay", "stats overlay has a stable frame name")
 check(HTF.Stats.overlay:IsShown(), "stats overlay defaults visible")
+for _, event in ipairs({ "SPEED_UPDATE", "LIFESTEAL_UPDATE", "AVOIDANCE_UPDATE", "PLAYER_DAMAGE_DONE_MODS" }) do
+	check(HTF.Stats.eventFrame.events[event], "stats HUD listens for live updates from " .. event)
+end
+for _, event in ipairs({ "UNIT_STATS", "UNIT_AURA", "UNIT_SPELL_HASTE" }) do
+	equal(HTF.Stats.eventFrame.unitEvents[event][1], "player", "stats HUD limits " .. event .. " to the player")
+end
 equal(HTF.Stats.overlay.mouseEnabled, false, "locked overlay does not intercept mouse input")
 equal(HTF.Stats.overlay.backdropColor[4], 0, "locked overlay background is transparent")
 equal(HTF.Stats.overlay.backdropBorderColor[4], 0, "locked overlay border is transparent")
@@ -1400,12 +1412,34 @@ equal(HTF.Stats.overlay.backdropColor[4], 0, "re-locking HUD restores transparen
 check(not HTF.Stats.overlay.resizeHandle:IsShown(), "re-locking HUD hides its resize handle")
 
 combatLocked = true
+local readsBeforeCombat = statReads
 fireEvent("PLAYER_REGEN_DISABLED")
-equal(HTF.Stats.overlay.status:GetText(), HTF.L.STATS_IN_COMBAT, "combat preserves values and shows a HUD refresh notice")
+flushTimers()
+check(statReads > readsBeforeCombat, "entering combat refreshes the HUD instead of blocking stat reads")
+equal(HTF.Stats.overlay.status:GetText(), "", "combat does not show a blanket restriction notice")
+
+local readsBeforeForeignAura = statReads
+fireEvent("UNIT_AURA", "target")
+flushTimers()
+equal(statReads, readsBeforeForeignAura, "non-player aura events do not refresh the HUD")
+
+secretHaste = true
+fireEvent("UNIT_SPELL_HASTE", "player")
+flushTimers()
+equal(HTF.Stats.overlay.rows.haste:GetText(), HTF.Stats:GetStatLabel("haste") .. ": " .. HTF.L.STAT_RESTRICTED, "genuinely secret combat stats remain restricted per value")
+check(not HTF.Stats.overlay.rows.strength:GetText():find(HTF.L.STAT_RESTRICTED, 1, true), "readable combat stats continue to display")
+equal(HTF.Stats.overlay.status:GetText(), HTF.L.STATS_PARTIALLY_RESTRICTED, "combat reports only actual restricted values")
+
+secretHaste = false
+fireEvent("UNIT_AURA", "player")
+flushTimers()
+equal(HTF.Stats.overlay.rows.haste:GetText(), HTF.Stats:GetStatLabel("haste") .. ": 12.50%", "player aura changes refresh readable combat stats")
+equal(HTF.Stats.overlay.status:GetText(), "", "combat restriction notice clears when values are readable")
+
 combatLocked = false
 fireEvent("PLAYER_REGEN_ENABLED")
 flushTimers()
-equal(HTF.Stats.overlay.status:GetText(), "", "leaving combat refreshes and clears the HUD notice")
+equal(HTF.Stats.overlay.status:GetText(), "", "leaving combat performs a final HUD refresh")
 
 HTF.db.statsLocked = "corrupt"
 HTF.db.statsFontSize = "large"
