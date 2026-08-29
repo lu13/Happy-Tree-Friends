@@ -7,6 +7,8 @@ RaidDebuffs.ICON_SIZE = 12
 RaidDebuffs.ICON_SPACING = 1
 RaidDebuffs.MAX_PER_CATEGORY = 2
 RaidDebuffs.MAX_OFFSET = 40
+RaidDebuffs.MAX_SHORT_OTHER_DURATION = 60
+RaidDebuffs.ICONS_PER_ROW = 4
 
 RaidDebuffs.GROUPS = {
 	{
@@ -42,6 +44,18 @@ RaidDebuffs.GROUPS = {
 			isPriorityAura = false,
 		},
 	},
+	{
+		key = "shortOther",
+		settingKey = "raidDebuffsShowShortOther",
+		filterString = "HARMFUL|!RAID|!CROWD_CONTROL|!RAID_IN_COMBAT",
+		candidateFilters = {
+			excludeDispelTypes = { Bleed = true },
+			isBossAura = false,
+			isRoleAura = false,
+			isPriorityAura = false,
+			maxDuration = RaidDebuffs.MAX_SHORT_OTHER_DURATION,
+		},
+	},
 }
 
 RaidDebuffs.SETTING_KEYS = {
@@ -49,6 +63,7 @@ RaidDebuffs.SETTING_KEYS = {
 	raidDebuffsShowBleed = true,
 	raidDebuffsShowCrowdControl = true,
 	raidDebuffsShowRaidInCombat = true,
+	raidDebuffsShowShortOther = true,
 	raidDebuffsAnchor = true,
 	raidDebuffsOffsetX = true,
 	raidDebuffsOffsetY = true,
@@ -240,7 +255,7 @@ function RaidDebuffs:ConfigureContainerLayout(container)
 	container:SetFlowLayoutAnchorPoint(anchor)
 	container:SetFlowLayoutGrowthDirection(horizontal, vertical)
 	container:SetFlowLayoutPadding(0, 0, 0, 0)
-	container:SetFlowLayoutMaximumLineSize((self.ICON_SIZE * 3) + (self.ICON_SPACING * 2))
+	container:SetFlowLayoutMaximumLineSize((self.ICON_SIZE * self.ICONS_PER_ROW) + (self.ICON_SPACING * (self.ICONS_PER_ROW - 1)))
 end
 
 function RaidDebuffs:ConfigureCategoryVisibility(container)

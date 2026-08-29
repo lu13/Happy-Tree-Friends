@@ -531,6 +531,7 @@ function Options:CreateRaidDebuffsPage(page)
 	self:CreateCompactToggleRow(page, "left", -164, "raidDebuffsShowBleed", HTF.L.RAID_DEBUFFS_BLEED, HTF.L.RAID_DEBUFFS_BLEED_DESC)
 	self:CreateCompactToggleRow(page, "right", -164, "raidDebuffsShowCrowdControl", HTF.L.RAID_DEBUFFS_CROWD_CONTROL, HTF.L.RAID_DEBUFFS_CROWD_CONTROL_DESC)
 	self:CreateCompactToggleRow(page, "left", -230, "raidDebuffsShowRaidInCombat", HTF.L.RAID_DEBUFFS_RAID_IN_COMBAT, HTF.L.RAID_DEBUFFS_RAID_IN_COMBAT_DESC)
+	self:CreateCompactToggleRow(page, "right", -230, "raidDebuffsShowShortOther", HTF.L.RAID_DEBUFFS_SHORT_OTHER, HTF.L.RAID_DEBUFFS_SHORT_OTHER_DESC)
 
 	local positionCard = CreateFrame("Frame", nil, page, "BackdropTemplate")
 	positionCard:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -300)

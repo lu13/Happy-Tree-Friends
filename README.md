@@ -13,7 +13,7 @@ Happy Tree Friends is a lightweight quality-of-life addon for **World of Warcraf
 - **Adventure HUD** — Display character stats, durability, free bag slots, money, and latency in a movable, resizable, lockable transparent overlay.
 - **Flexible HUD styling** — Show or hide each value and customize its font size and color.
 - **Friendly names** — Show friendly players as names only, with an optional custom font size.
-- **Raid debuff enhancement** — Add up to two bleeds, crowd-control effects, and raid-important debuffs per category to Blizzard party and raid frames while keeping Blizzard's own dispellable-only setting unchanged.
+- **Raid debuff enhancement** — Add up to two bleeds, crowd-control effects, raid-important debuffs, and short otherwise-unclassified effects per category to Blizzard party and raid frames while keeping Blizzard's own dispellable-only setting unchanged.
 - **Compact aura controls** — Choose which debuff categories appear, select one of four frame corners, and fine-tune icon offsets.
 - **Standalone settings** — Open a clean, movable HTF settings window directly with `/htf`.
 - **Diagnostics** — English and Simplified Chinese localization, optional debug logging, and a copyable diagnostic report.
@@ -40,7 +40,7 @@ Happy Tree Friends is a lightweight quality-of-life addon for **World of Warcraf
 
 ## Raid Debuff Limitation
 
-WoW 12.1 does not reliably permit spell-ID filtering for harmful auras on friendly units. The addon therefore uses Blizzard's secure bleed, crowd-control, and raid-in-combat categories. Ordinary slows are shown only when Blizzard classifies them into one of those categories.
+WoW 12.1 does not reliably permit spell-ID filtering for harmful auras on friendly units. The addon therefore uses Blizzard's secure bleed, crowd-control, and raid-in-combat categories, plus a disjoint fallback for otherwise-unclassified debuffs lasting up to 60 seconds that the active character's dispellable-only filter omits. This fallback covers Ula'tek's Hobbled (spell 1300938), but can also include short effects that are not movement slows.
 
 ## Development Note
 

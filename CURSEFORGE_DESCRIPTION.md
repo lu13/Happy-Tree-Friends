@@ -10,6 +10,7 @@ Happy Tree Friends is a lightweight quality-of-life toolkit for **World of Warcr
 - A movable, resizable, lockable HUD for character stats, durability, bag space, money, and latency
 - Independent visibility, font-size, and color controls for HUD values
 - Friendly-player name-only mode with a custom font-size option
+- Secure raid-debuff categories for bleeds, crowd control, raid-important effects, and short otherwise-unclassified debuffs such as Ula'tek's Hobbled (1300938)
 - A clean standalone settings window
 - English and Simplified Chinese localization, debug logs, and copyable diagnostics
 
@@ -19,6 +20,7 @@ Happy Tree Friends is a lightweight quality-of-life toolkit for **World of Warcr
 - `/htf stats` — HUD settings
 - `/htf merchant` — Merchant settings
 - `/htf nameplates` — Friendly-name settings
+- `/htf debuffs` — Raid-debuff enhancement settings
 - `/htf protect <item link or ID>` — Protect a grey item
 - `/htf unprotect <item link or ID>` — Remove protection
 - `/htf protected` — List protected items

@@ -3,7 +3,7 @@
 ## Notes: An event-driven WoW Retail toolkit with raid debuff enhancements, safe merchant automation, friendly names, and a customizable adventure HUD.
 ## Notes-zhCN: 事件驱动的正式服日常工具：团队减益增强、安全修理/售灰装、友方仅姓名和可定制冒险状态悬浮层。
 ## Author: Happy Tree Friends
-## Version: 0.7.0
+## Version: 0.7.1
 ## Dependencies: Blizzard_AuraContainer, Blizzard_UnitFrame
 ## SavedVariables: HappyTreeFriendsDB
 

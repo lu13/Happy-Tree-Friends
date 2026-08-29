@@ -907,7 +907,7 @@ for _, path in ipairs({
 end
 
 fireEvent("ADDON_LOADED", "HappyTreeFriends")
-equal(HTF.VERSION, "0.7.0", "addon version")
+equal(HTF.VERSION, "0.7.1", "addon version")
 equal(HTF.LOCALE, testLocale, "addon selects the active supported locale")
 equal(HTF.CLIENT_LOCALE, testLocale, "addon records the client locale")
 equal(HTF.L.SETTINGS, testLocale == "zhCN" and "设置" or "Settings", "selected locale exposes translated settings text")
@@ -923,7 +923,7 @@ for _, definition in ipairs(HTF.Stats.STAT_DEFINITIONS) do
 	check(HTF.LOCALES.zhCN[definition.fallbackKey] ~= nil, "zhCN stat fallback exists: " .. definition.key)
 end
 local formatCases = {
-	VERSION_LABEL = { "0.7.0" },
+	VERSION_LABEL = { "0.7.1" },
 	REPAIRED_PERSONAL = { "1g" },
 	REPAIRED_GUILD = { "1g" },
 	REPAIRED_MIXED = { "1g" },
@@ -964,6 +964,7 @@ equal(HTF:GetSetting("raidDebuffsEnabled"), false, "raid debuff enhancement defa
 equal(HTF:GetSetting("raidDebuffsShowBleed"), true, "bleed category defaults on")
 equal(HTF:GetSetting("raidDebuffsShowCrowdControl"), true, "crowd-control category defaults on")
 equal(HTF:GetSetting("raidDebuffsShowRaidInCombat"), true, "raid-important category defaults on")
+equal(HTF:GetSetting("raidDebuffsShowShortOther"), true, "short-other category defaults on")
 equal(HTF:GetSetting("raidDebuffsAnchor"), "BOTTOMRIGHT", "raid debuff icons default to the bottom-right corner")
 equal(HTF:GetSetting("raidDebuffsOffsetX"), -2, "raid debuff icons have a safe horizontal offset")
 equal(HTF:GetSetting("raidDebuffsOffsetY"), 2, "raid debuff icons have a safe vertical offset")
@@ -1022,7 +1023,7 @@ check(partyAuraContainer:IsEnabled(), "party aura container is enabled")
 equal(partyAuraContainer.layoutAnchor, "BOTTOMRIGHT", "container uses the configured corner")
 equal(partyAuraContainer.growthDirection[1], AnchorUtil.FlowDirection.Left, "bottom-right layout grows left")
 equal(partyAuraContainer.growthDirection[2], AnchorUtil.FlowDirection.Up, "bottom-right layout grows up")
-equal(partyAuraContainer.maximumLineSize, 38, "container wraps after three twelve-pixel icons")
+equal(partyAuraContainer.maximumLineSize, 51, "container wraps after four twelve-pixel icons")
 equal(partyAuraContainer.points[1][3], "BOTTOMRIGHT", "container anchors to the matching frame corner")
 equal(partyAuraContainer.points[1][4], -2, "container applies the horizontal offset")
 equal(partyAuraContainer.points[1][5], 2, "container applies the vertical offset")
@@ -1030,21 +1031,25 @@ equal(partyAuraContainer.points[1][5], 2, "container applies the vertical offset
 local bleedGroup = partyAuraContainer.auraGroups.bleed
 local crowdControlGroup = partyAuraContainer.auraGroups.crowdControl
 local raidImportantGroup = partyAuraContainer.auraGroups.raidInCombat
+local shortOtherGroup = partyAuraContainer.auraGroups.shortOther
 equal(bleedGroup.filterString, "HARMFUL|!RAID", "bleeds exclude effects the player can already dispel")
 equal(crowdControlGroup.filterString, "HARMFUL|!RAID|CROWD_CONTROL", "crowd control uses Blizzard's secure classification")
 equal(raidImportantGroup.filterString, "HARMFUL|!RAID|RAID_IN_COMBAT|!CROWD_CONTROL", "raid-important effects exclude crowd-control duplicates")
-for _, group in ipairs({ bleedGroup, crowdControlGroup, raidImportantGroup }) do
+equal(shortOtherGroup.filterString, "HARMFUL|!RAID|!CROWD_CONTROL|!RAID_IN_COMBAT", "short-other effects exclude secure category duplicates")
+for _, group in ipairs({ bleedGroup, crowdControlGroup, raidImportantGroup, shortOtherGroup }) do
 	equal(group.maxFrameCount, 2, "each raid debuff category displays at most two icons")
 	equal(group.options.candidateFilters.isBossAura, false, "supplemental groups exclude native boss auras")
 	equal(group.options.candidateFilters.isRoleAura, false, "supplemental groups exclude native role auras")
 	equal(group.options.candidateFilters.isPriorityAura, false, "supplemental groups exclude native priority auras")
 	equal(group.options.candidateFilters.includeSpellIDs, nil, "supplemental groups never use forbidden spell-ID inclusion")
 	equal(group.options.candidateFilters.excludeSpellIDs, nil, "supplemental groups never use forbidden spell-ID exclusion")
-	equal(group.options.layout.groupSpacing, 0, "categories share a three-icon row without forcing an early wrap")
+	equal(group.options.layout.groupSpacing, 0, "categories share a four-icon row without forcing an early wrap")
 end
 check(bleedGroup.options.candidateFilters.includeDispelTypes.Bleed, "bleed group includes only the Bleed dispel type")
 check(crowdControlGroup.options.candidateFilters.excludeDispelTypes.Bleed, "crowd-control group excludes bleed duplicates")
 check(raidImportantGroup.options.candidateFilters.excludeDispelTypes.Bleed, "raid-important group excludes bleed duplicates")
+check(shortOtherGroup.options.candidateFilters.excludeDispelTypes.Bleed, "short-other group excludes bleed duplicates")
+equal(shortOtherGroup.options.candidateFilters.maxDuration, 60, "short-other group includes one-minute Hobbled without broad permanent-debuff matching")
 
 local sampleAuraButton = bleedGroup.sampleButton
 equal(sampleAuraButton.width, 12, "supplemental aura buttons use the compact icon size")
@@ -1060,6 +1065,9 @@ HTF:SetSetting("raidDebuffsShowBleed", false)
 equal(partyAuraContainer.auraGroups.bleed.maxFrameCount, 0, "disabling a category hides its secure aura group")
 equal(partyAuraContainer.auraGroups.crowdControl.maxFrameCount, 2, "disabling one category leaves other categories enabled")
 HTF:SetSetting("raidDebuffsShowBleed", true)
+HTF:SetSetting("raidDebuffsShowShortOther", false)
+equal(partyAuraContainer.auraGroups.shortOther.maxFrameCount, 0, "disabling short-other effects hides their secure aura group")
+HTF:SetSetting("raidDebuffsShowShortOther", true)
 
 check(HTF.RaidDebuffs:SetAnchor("TOPLEFT"), "valid raid debuff anchors are accepted")
 check(not HTF.RaidDebuffs:SetAnchor("CENTER"), "unsupported raid debuff anchors are rejected")
@@ -1973,6 +1981,7 @@ contains(report, "friendlyNameCustomFontSize: false", "diagnostic report include
 contains(report, "friendlyNameFontSize: 14", "diagnostic report includes friendly name font size")
 contains(report, "raidDebuffsEnabled: false", "diagnostic report includes the raid debuff master setting")
 contains(report, "raidDebuffsShowBleed: true", "diagnostic report includes the bleed category setting")
+contains(report, "raidDebuffsShowShortOther: true", "diagnostic report includes the short-other category setting")
 contains(report, "raidDebuffsAnchor: BOTTOMRIGHT", "diagnostic report includes the raid debuff corner")
 contains(report, "raidDebuffsOffset: -2, 2", "diagnostic report includes raid debuff offsets")
 contains(report, "raidDebuffsAvailable: true", "diagnostic report includes secure aura availability")
