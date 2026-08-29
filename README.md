@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-Happy Tree Friends is a lightweight quality-of-life addon for **World of Warcraft Retail 12.1**. It brings merchant automation, a customizable character HUD, and friendly-player name controls together in one clean settings window.
+Happy Tree Friends is a lightweight quality-of-life addon for **World of Warcraft Retail 12.1**. It brings secure raid-debuff enhancements, merchant automation, a customizable character HUD, and friendly-player name controls together in one clean settings window.
 
 ## Features
 
@@ -13,6 +13,8 @@ Happy Tree Friends is a lightweight quality-of-life addon for **World of Warcraf
 - **Adventure HUD** — Display character stats, durability, free bag slots, money, and latency in a movable, resizable, lockable transparent overlay.
 - **Flexible HUD styling** — Show or hide each value and customize its font size and color.
 - **Friendly names** — Show friendly players as names only, with an optional custom font size.
+- **Raid debuff enhancement** — Add up to two bleeds, crowd-control effects, and raid-important debuffs per category to Blizzard party and raid frames while keeping Blizzard's own dispellable-only setting unchanged.
+- **Compact aura controls** — Choose which debuff categories appear, select one of four frame corners, and fine-tune icon offsets.
 - **Standalone settings** — Open a clean, movable HTF settings window directly with `/htf`.
 - **Diagnostics** — English and Simplified Chinese localization, optional debug logging, and a copyable diagnostic report.
 
@@ -22,6 +24,7 @@ Happy Tree Friends is a lightweight quality-of-life addon for **World of Warcraf
 - `/htf stats` — Open HUD settings.
 - `/htf merchant` — Open merchant settings.
 - `/htf nameplates` — Open friendly-name settings.
+- `/htf debuffs` — Open raid-debuff enhancement settings.
 - `/htf protect <item link or ID>` — Protect a grey item from automatic selling.
 - `/htf unprotect <item link or ID>` — Remove an item from the protection list.
 - `/htf protected` — List protected items.
@@ -34,6 +37,10 @@ Happy Tree Friends is a lightweight quality-of-life addon for **World of Warcraf
 - World of Warcraft Retail 12.1
 - Interface version 120100
 - English and Simplified Chinese
+
+## Raid Debuff Limitation
+
+WoW 12.1 does not reliably permit spell-ID filtering for harmful auras on friendly units. The addon therefore uses Blizzard's secure bleed, crowd-control, and raid-in-combat categories. Ordinary slows are shown only when Blizzard classifies them into one of those categories.
 
 ## Development Note
 

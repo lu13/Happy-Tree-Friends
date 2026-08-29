@@ -281,6 +281,7 @@ function Options:CreateOverviewPage(page)
 		{ key = "autoRepair", label = HTF.L.AUTO_REPAIR },
 		{ key = "autoSellJunk", label = HTF.L.AUTO_SELL_JUNK },
 		{ key = "friendlyNamesOnly", label = HTF.L.FRIENDLY_NAMES_ONLY },
+		{ key = "raidDebuffsEnabled", label = HTF.L.RAID_DEBUFFS },
 		{ key = "showStats", label = HTF.L.CHARACTER_STATS },
 		{ key = "debug", label = HTF.L.DEBUG_MODE },
 	}
@@ -524,6 +525,123 @@ function Options:CreateNameplatesPage(page)
 	noteText:SetJustifyV("TOP")
 end
 
+function Options:CreateRaidDebuffsPage(page)
+	self:AddPageHeader(page, HTF.L.RAID_DEBUFFS, HTF.L.RAID_DEBUFFS_PAGE_HELP)
+	self:CreateToggleRow(page, -84, "raidDebuffsEnabled", HTF.L.RAID_DEBUFFS_ENABLED, HTF.L.RAID_DEBUFFS_ENABLED_DESC)
+	self:CreateCompactToggleRow(page, "left", -164, "raidDebuffsShowBleed", HTF.L.RAID_DEBUFFS_BLEED, HTF.L.RAID_DEBUFFS_BLEED_DESC)
+	self:CreateCompactToggleRow(page, "right", -164, "raidDebuffsShowCrowdControl", HTF.L.RAID_DEBUFFS_CROWD_CONTROL, HTF.L.RAID_DEBUFFS_CROWD_CONTROL_DESC)
+	self:CreateCompactToggleRow(page, "left", -230, "raidDebuffsShowRaidInCombat", HTF.L.RAID_DEBUFFS_RAID_IN_COMBAT, HTF.L.RAID_DEBUFFS_RAID_IN_COMBAT_DESC)
+
+	local positionCard = CreateFrame("Frame", nil, page, "BackdropTemplate")
+	positionCard:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -300)
+	positionCard:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, -300)
+	positionCard:SetHeight(72)
+	applyBackdrop(positionCard, COLORS.sidebar, COLORS.border)
+
+	local positionTitle = createText(positionCard, "GameFontNormal", HTF.L.RAID_DEBUFFS_POSITION, 12, COLORS.text)
+	positionTitle:SetPoint("TOPLEFT", 13, -11)
+	local positionHelp = createText(positionCard, "GameFontHighlightSmall", HTF.L.RAID_DEBUFFS_POSITION_HELP, 10, COLORS.muted)
+	positionHelp:SetPoint("TOPLEFT", positionTitle, "BOTTOMLEFT", 0, -5)
+	positionHelp:SetWidth(190)
+	positionHelp:SetJustifyH("LEFT")
+
+	self.raidDebuffAnchorButtons = {}
+	local anchorDefinitions = {
+		{ key = "TOPLEFT", label = HTF.L.RAID_DEBUFFS_ANCHOR_TOPLEFT },
+		{ key = "TOPRIGHT", label = HTF.L.RAID_DEBUFFS_ANCHOR_TOPRIGHT },
+		{ key = "BOTTOMLEFT", label = HTF.L.RAID_DEBUFFS_ANCHOR_BOTTOMLEFT },
+		{ key = "BOTTOMRIGHT", label = HTF.L.RAID_DEBUFFS_ANCHOR_BOTTOMRIGHT },
+	}
+	local previousButton
+	for _, definition in ipairs(anchorDefinitions) do
+		local anchorKey = definition.key
+		local button = createActionButton(positionCard, definition.label)
+		button:SetSize(84, 28)
+		if previousButton then
+			button:SetPoint("LEFT", previousButton, "RIGHT", 7, 0)
+		else
+			button:SetPoint("LEFT", positionCard, "LEFT", 224, 0)
+		end
+
+		function button:SetSelected(selected)
+			self.selected = selected
+			if selected then
+				applyBackdrop(self, COLORS.accentMuted, COLORS.accent)
+			else
+				applyBackdrop(self, COLORS.panel, COLORS.border)
+			end
+		end
+
+		button:SetScript("OnEnter", function(self)
+			if not self.selected then
+				applyBackdrop(self, COLORS.panelHover, COLORS.accentMuted)
+			end
+		end)
+		button:SetScript("OnLeave", function(self)
+			self:SetSelected(self.selected)
+		end)
+		button:SetScript("OnClick", function()
+			if HTF.RaidDebuffs then
+				HTF.RaidDebuffs:SetAnchor(anchorKey)
+			end
+		end)
+		self.raidDebuffAnchorButtons[anchorKey] = button
+		previousButton = button
+	end
+
+	local offsetCard = CreateFrame("Frame", nil, page, "BackdropTemplate")
+	offsetCard:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -382)
+	offsetCard:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, -382)
+	offsetCard:SetHeight(60)
+	applyBackdrop(offsetCard, COLORS.sidebar, COLORS.border)
+
+	local offsetTitle = createText(offsetCard, "GameFontNormal", HTF.L.RAID_DEBUFFS_OFFSET, 12, COLORS.text)
+	offsetTitle:SetPoint("LEFT", 13, 0)
+
+	local function createOffsetControl(axis, label, leftOffset)
+		local axisLabel = createText(offsetCard, "GameFontHighlightSmall", label, 11, COLORS.muted)
+		axisLabel:SetPoint("LEFT", offsetCard, "LEFT", leftOffset, 0)
+		local minus = createActionButton(offsetCard, "−")
+		minus:SetSize(28, 26)
+		minus:SetPoint("LEFT", axisLabel, "RIGHT", 8, 0)
+		minus:SetScript("OnClick", function()
+			HTF.RaidDebuffs:AdjustOffset(axis, -1)
+		end)
+		local value = createText(offsetCard, "GameFontNormal", "", 12, COLORS.accent)
+		value:SetPoint("LEFT", minus, "RIGHT", 8, 0)
+		value:SetWidth(30)
+		value:SetJustifyH("CENTER")
+		local plus = createActionButton(offsetCard, "+")
+		plus:SetSize(28, 26)
+		plus:SetPoint("LEFT", value, "RIGHT", 8, 0)
+		plus:SetScript("OnClick", function()
+			HTF.RaidDebuffs:AdjustOffset(axis, 1)
+		end)
+		return value
+	end
+
+	self.raidDebuffOffsetXValue = createOffsetControl("x", HTF.L.RAID_DEBUFFS_OFFSET_X, 140)
+	self.raidDebuffOffsetYValue = createOffsetControl("y", HTF.L.RAID_DEBUFFS_OFFSET_Y, 300)
+
+	local resetButton = createActionButton(offsetCard, HTF.L.RAID_DEBUFFS_RESET_POSITION)
+	resetButton:SetSize(112, 28)
+	resetButton:SetPoint("RIGHT", offsetCard, "RIGHT", -12, 0)
+	resetButton:SetScript("OnClick", function()
+		HTF.RaidDebuffs:ResetPosition()
+	end)
+
+	local note = CreateFrame("Frame", nil, page, "BackdropTemplate")
+	note:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -452)
+	note:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, -452)
+	note:SetHeight(86)
+	applyBackdrop(note, COLORS.panel, COLORS.border)
+	local noteText = createText(note, "GameFontHighlightSmall", HTF.L.RAID_DEBUFFS_LIMIT_NOTICE, 11, COLORS.muted)
+	noteText:SetPoint("TOPLEFT", 14, -13)
+	noteText:SetPoint("TOPRIGHT", -14, -13)
+	noteText:SetJustifyH("LEFT")
+	noteText:SetJustifyV("TOP")
+end
+
 function Options:OpenStatColorPicker(key)
 	if not HTF.Stats or type(ColorPickerFrame) ~= "table" or type(ColorPickerFrame.SetupColorPickerAndShow) ~= "function" then
 		HTF:Notify(HTF.L.COLOR_PICKER_UNAVAILABLE)
@@ -566,6 +684,22 @@ end
 function Options:RefreshFriendlyNameSettings()
 	if self.friendlyNameFontValue and HTF.FriendlyNames and HTF.FriendlyNames.GetFontSize then
 		self.friendlyNameFontValue:SetText(tostring(HTF.FriendlyNames:GetFontSize()))
+	end
+end
+
+function Options:RefreshRaidDebuffSettings()
+	if not HTF.RaidDebuffs then
+		return
+	end
+	local anchor = HTF.RaidDebuffs:GetAnchor()
+	for key, button in pairs(self.raidDebuffAnchorButtons or {}) do
+		button:SetSelected(key == anchor)
+	end
+	if self.raidDebuffOffsetXValue then
+		self.raidDebuffOffsetXValue:SetText(tostring(HTF.RaidDebuffs:GetOffsetX()))
+	end
+	if self.raidDebuffOffsetYValue then
+		self.raidDebuffOffsetYValue:SetText(tostring(HTF.RaidDebuffs:GetOffsetY()))
 	end
 end
 
@@ -749,7 +883,8 @@ function Options:CreatePanel()
 	self:CreateNavigationButton(sidebar, "merchant", HTF.L.MERCHANT, -160)
 	self:CreateNavigationButton(sidebar, "stats", HTF.L.CHARACTER_STATS, -204)
 	self:CreateNavigationButton(sidebar, "nameplates", HTF.L.NAMEPLATES, -248)
-	self:CreateNavigationButton(sidebar, "debug", HTF.L.DEBUG, -292)
+	self:CreateNavigationButton(sidebar, "raidDebuffs", HTF.L.RAID_DEBUFFS, -292)
+	self:CreateNavigationButton(sidebar, "debug", HTF.L.DEBUG, -336)
 
 	local sidebarHelp = createText(sidebar, "GameFontHighlightSmall", "/htf", 12, COLORS.accent)
 	sidebarHelp:SetPoint("BOTTOMLEFT", 18, 23)
@@ -760,7 +895,7 @@ function Options:CreatePanel()
 	content:SetPoint("TOPLEFT", sidebar, "TOPRIGHT", 1, 0)
 	content:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 0)
 
-	for _, key in ipairs({ "overview", "merchant", "stats", "nameplates", "debug" }) do
+	for _, key in ipairs({ "overview", "merchant", "stats", "nameplates", "raidDebuffs", "debug" }) do
 		local page = CreateFrame("Frame", nil, content)
 		page:SetAllPoints(content)
 		page:Hide()
@@ -771,6 +906,7 @@ function Options:CreatePanel()
 	self:CreateMerchantPage(self.pages.merchant)
 	self:CreateStatsPage(self.pages.stats)
 	self:CreateNameplatesPage(self.pages.nameplates)
+	self:CreateRaidDebuffsPage(self.pages.raidDebuffs)
 	self:CreateDebugPage(self.pages.debug)
 
 	local closeButton = CreateFrame("Button", nil, panel, "UIPanelCloseButton")
@@ -855,6 +991,7 @@ function Options:SelectPage(key)
 	self:RefreshOverview()
 	self:RefreshStatSettings()
 	self:RefreshFriendlyNameSettings()
+	self:RefreshRaidDebuffSettings()
 	self:RefreshMerchantLedger()
 	self:RefreshDebugLog()
 end
@@ -913,6 +1050,7 @@ function Options:Refresh()
 	self:RefreshOverview()
 	self:RefreshStatSettings()
 	self:RefreshFriendlyNameSettings()
+	self:RefreshRaidDebuffSettings()
 	self:RefreshMerchantLedger()
 	self:RefreshDebugLog()
 end

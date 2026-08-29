@@ -144,6 +144,10 @@ function objectMethods:GetName()
 	return self.frameName
 end
 
+function objectMethods:GetParent()
+	return self.parent
+end
+
 function objectMethods:SetText(text)
 	self.text = text or ""
 end
@@ -208,8 +212,52 @@ function objectMethods:SetColorTexture(r, g, b, a)
 	self.textureColor = { r, g, b, a }
 end
 
+function objectMethods:SetTexCoord(...)
+	self.texCoords = { ... }
+end
+
 function objectMethods:EnableMouse(enabled)
 	self.mouseEnabled = enabled == true
+end
+
+function objectMethods:SetMouseClickEnabled(enabled)
+	self.mouseClickEnabled = enabled == true
+end
+
+function objectMethods:SetMouseMotionEnabled(enabled)
+	self.mouseMotionEnabled = enabled == true
+end
+
+function objectMethods:SetHideTooltipInCombat(hidden)
+	self.hideTooltipInCombat = hidden == true
+end
+
+function objectMethods:SetTooltipAnchorPoint(point, x, y)
+	self.tooltipAnchor = { point, x, y }
+end
+
+function objectMethods:SetIcon(icon)
+	self.icon = icon
+end
+
+function objectMethods:SetDurationCooldown(cooldown)
+	self.durationCooldown = cooldown
+end
+
+function objectMethods:SetApplicationCount(count)
+	self.applicationCount = count
+end
+
+function objectMethods:SetAuraBorder(border)
+	self.auraBorder = border
+end
+
+function objectMethods:SetDrawEdge(enabled)
+	self.drawEdge = enabled == true
+end
+
+function objectMethods:SetHideCountdownNumbers(hidden)
+	self.hideCountdownNumbers = hidden == true
 end
 
 function objectMethods:SetMovable(movable)
@@ -307,8 +355,92 @@ function CreateFrame(kind, name, parent, template)
 		object.ScrollBar = newObject("Slider", name and (name .. "ScrollBar") or nil, object, "UIPanelScrollBarTemplate")
 		object.ScrollBar.ScrollUpButton = newObject("Button", nil, object.ScrollBar)
 		object.ScrollBar.ScrollDownButton = newObject("Button", nil, object.ScrollBar)
+	elseif template == "CustomAuraContainerTemplate" then
+		object.auraGroups = {}
+		function object:SetUnit(unit)
+			self.unitToken = unit
+		end
+		function object:GetUnit()
+			return self.unitToken
+		end
+		function object:SetEnabled(enabled)
+			self.enabled = enabled == true
+		end
+		function object:IsEnabled()
+			return self.enabled == true
+		end
+		function object:SetFlowLayoutAxis(axis)
+			self.layoutAxis = axis
+		end
+		function object:SetFlowLayoutAnchorPoint(anchor)
+			self.layoutAnchor = anchor
+		end
+		function object:SetFlowLayoutGrowthDirection(horizontal, vertical)
+			self.growthDirection = { horizontal, vertical }
+		end
+		function object:SetFlowLayoutPadding(...)
+			self.padding = { ... }
+		end
+		function object:SetFlowLayoutMaximumLineSize(size)
+			self.maximumLineSize = size
+		end
+		function object:AddAuraGroup(key, filterString, options)
+			local group = {
+				key = key,
+				filterString = filterString,
+				options = options,
+				maxFrameCount = options.maxFrameCount,
+			}
+			self.auraGroups[key] = group
+			local auraButton = newObject("AuraButton", nil, self, "CustomAuraButtonTemplate")
+			group.sampleButton = auraButton
+			if options.initializeFrame then
+				options.initializeFrame(auraButton)
+			end
+		end
+		function object:SetAuraGroupMaxFrameCount(key, maximum)
+			self.auraGroups[key].maxFrameCount = maximum
+		end
 	end
 	return object
+end
+
+AnchorUtil = {
+	FlowLayoutAxis = { Horizontal = "Horizontal" },
+	FlowDirection = {
+		Right = "Right",
+		Left = "Left",
+		Down = "Down",
+		Up = "Up",
+	},
+}
+
+CompactRaidGroupTypeEnum = { Party = 1, Raid = 2 }
+CompactPartyFrame = CreateFrame("Frame", "CompactPartyFrame", UIParent)
+CompactPartyFrame.memberUnitFrames = {}
+CompactRaidFrameContainer = CreateFrame("Frame", "CompactRaidFrameContainer", UIParent)
+CompactRaidFrameContainer.normalFrames = {}
+function CompactRaidFrameContainer:ApplyToFrames(updateSpecifier, callback)
+	if updateSpecifier == "normal" or updateSpecifier == "all" then
+		for _, frame in ipairs(self.normalFrames) do
+			callback(frame)
+		end
+	end
+end
+
+function CompactUnitFrame_UpdateAll(frame)
+	frame.compactUpdateCount = (frame.compactUpdateCount or 0) + 1
+end
+
+function hooksecurefunc(functionName, callback)
+	local original = _G[functionName]
+	check(type(original) == "function", "hooksecurefunc target exists: " .. tostring(functionName))
+	_G[functionName] = function(...)
+		local results = { original(...) }
+		callback(...)
+		local unpackResults = table.unpack or unpack
+		return unpackResults(results)
+	end
 end
 
 local registeredCategory
@@ -763,6 +895,7 @@ local HTF = {}
 for _, path in ipairs({
 	"HappyTreeFriends/Locales.lua",
 	"HappyTreeFriends/Core.lua",
+	"HappyTreeFriends/RaidDebuffs.lua",
 	"HappyTreeFriends/FriendlyNames.lua",
 	"HappyTreeFriends/Merchant.lua",
 	"HappyTreeFriends/Stats.lua",
@@ -774,7 +907,7 @@ for _, path in ipairs({
 end
 
 fireEvent("ADDON_LOADED", "HappyTreeFriends")
-equal(HTF.VERSION, "0.6.1", "addon version")
+equal(HTF.VERSION, "0.7.0", "addon version")
 equal(HTF.LOCALE, testLocale, "addon selects the active supported locale")
 equal(HTF.CLIENT_LOCALE, testLocale, "addon records the client locale")
 equal(HTF.L.SETTINGS, testLocale == "zhCN" and "设置" or "Settings", "selected locale exposes translated settings text")
@@ -790,7 +923,7 @@ for _, definition in ipairs(HTF.Stats.STAT_DEFINITIONS) do
 	check(HTF.LOCALES.zhCN[definition.fallbackKey] ~= nil, "zhCN stat fallback exists: " .. definition.key)
 end
 local formatCases = {
-	VERSION_LABEL = { "0.6.1" },
+	VERSION_LABEL = { "0.7.0" },
 	REPAIRED_PERSONAL = { "1g" },
 	REPAIRED_GUILD = { "1g" },
 	REPAIRED_MIXED = { "1g" },
@@ -807,6 +940,8 @@ local formatCases = {
 	DEBUG_STATS_POSITION_SAVED = { "TOP", "TOP", 1, -1 },
 	DEBUG_STAT_VISIBILITY_UPDATED = { "haste", "true" },
 	DEBUG_FRIENDLY_NAMES_CVAR_FAILED = { friendlyPlayerNamesCVar },
+	DEBUG_RAID_DEBUFFS_ATTACHED = { "raid1" },
+	DEBUG_RAID_DEBUFFS_UNAVAILABLE = { "error" },
 }
 local unpackValues = table.unpack or unpack
 for key, arguments in pairs(formatCases) do
@@ -825,11 +960,153 @@ equal(HTF:GetSetting("friendlyNameClassColors"), nil, "removed friendly name cla
 equal(HTF:GetSetting("friendlyNameCustomFontSize"), false, "friendly custom name size defaults off")
 equal(HTF:GetSetting("friendlyNameFontSize"), 14, "friendly name font size has a safe default")
 equal(HTF.db.friendlyNamesOnlySnapshot, nil, "friendly names-only mode has no default snapshot")
+equal(HTF:GetSetting("raidDebuffsEnabled"), false, "raid debuff enhancement defaults off")
+equal(HTF:GetSetting("raidDebuffsShowBleed"), true, "bleed category defaults on")
+equal(HTF:GetSetting("raidDebuffsShowCrowdControl"), true, "crowd-control category defaults on")
+equal(HTF:GetSetting("raidDebuffsShowRaidInCombat"), true, "raid-important category defaults on")
+equal(HTF:GetSetting("raidDebuffsAnchor"), "BOTTOMRIGHT", "raid debuff icons default to the bottom-right corner")
+equal(HTF:GetSetting("raidDebuffsOffsetX"), -2, "raid debuff icons have a safe horizontal offset")
+equal(HTF:GetSetting("raidDebuffsOffsetY"), 2, "raid debuff icons have a safe vertical offset")
 equal(HTF:GetSetting("statsLocked"), true, "stats overlay defaults locked")
 equal(HTF:GetSetting("statsFontSize"), 15, "stats overlay default font size")
 equal(HTF:GetSetting("statsScale"), 1, "stats overlay default scale")
 equal(HTF.Stats:GetVisibleStatCount(), 14, "all stats default visible")
 equal(HTF.Stats:GetVisibleAdventureStatusCount(), 0, "adventure status defaults hidden")
+
+check(HTF.RaidDebuffs:IsAvailable(), "secure raid debuff API is available in the test client")
+check(HTF.RaidDebuffs.eventFrame.events.PLAYER_REGEN_ENABLED, "raid debuff module retries after combat")
+check(HTF.RaidDebuffs.eventFrame.events.GROUP_ROSTER_UPDATE, "raid debuff module follows group roster changes")
+equal(HTF.RaidDebuffs:GetFrameUnit({ displayedUnit = SECRET, unit = "party1" }), nil, "secret displayed-unit tokens never fall back into filtering logic")
+
+local partyMember = CreateFrame("Button", "CompactPartyFrameMember1", CompactPartyFrame)
+partyMember.unit = "party1"
+partyMember.displayedUnit = "party1"
+partyMember.groupType = CompactRaidGroupTypeEnum.Party
+table.insert(CompactPartyFrame.memberUnitFrames, partyMember)
+
+local partyPet = CreateFrame("Button", "CompactPartyFramePet1", CompactPartyFrame)
+partyPet.unit = "partypet1"
+partyPet.displayedUnit = "partypet1"
+partyPet.groupType = CompactRaidGroupTypeEnum.Party
+table.insert(CompactPartyFrame.memberUnitFrames, partyPet)
+
+local raidMember = CreateFrame("Button", "CompactRaidFrame1", CompactRaidFrameContainer)
+raidMember.unit = "raid1"
+raidMember.displayedUnit = "raid1"
+raidMember.frameType = "raid"
+raidMember.groupType = CompactRaidGroupTypeEnum.Raid
+table.insert(CompactRaidFrameContainer.normalFrames, raidMember)
+
+local raidTarget = CreateFrame("Button", "CompactRaidFrameTarget", CompactRaidFrameContainer)
+raidTarget.unit = "raid1target"
+raidTarget.displayedUnit = "raid1target"
+raidTarget.frameType = "target"
+table.insert(CompactRaidFrameContainer.normalFrames, raidTarget)
+
+local thirdPartyFrame = CreateFrame("Button", "ThirdPartyRaidFrame", UIParent)
+thirdPartyFrame.unit = "raid2"
+thirdPartyFrame.displayedUnit = "raid2"
+
+HTF:SetSetting("raidDebuffsEnabled", true)
+local partyAuraContainer = HTF.RaidDebuffs:GetContainer(partyMember)
+local raidAuraContainer = HTF.RaidDebuffs:GetContainer(raidMember)
+check(partyAuraContainer ~= nil, "raid debuff enhancement attaches to Blizzard party frames")
+check(raidAuraContainer ~= nil, "raid debuff enhancement attaches to Blizzard raid frames")
+equal(HTF.RaidDebuffs:GetContainer(partyPet), nil, "party pet frames are excluded")
+equal(HTF.RaidDebuffs:GetContainer(raidTarget), nil, "raid target frames are excluded")
+CompactUnitFrame_UpdateAll(thirdPartyFrame)
+equal(HTF.RaidDebuffs:GetContainer(thirdPartyFrame), nil, "third-party compact frames are excluded")
+
+equal(partyAuraContainer:GetUnit(), "party1", "party aura container follows displayedUnit")
+check(partyAuraContainer:IsEnabled(), "party aura container is enabled")
+equal(partyAuraContainer.layoutAnchor, "BOTTOMRIGHT", "container uses the configured corner")
+equal(partyAuraContainer.growthDirection[1], AnchorUtil.FlowDirection.Left, "bottom-right layout grows left")
+equal(partyAuraContainer.growthDirection[2], AnchorUtil.FlowDirection.Up, "bottom-right layout grows up")
+equal(partyAuraContainer.maximumLineSize, 38, "container wraps after three twelve-pixel icons")
+equal(partyAuraContainer.points[1][3], "BOTTOMRIGHT", "container anchors to the matching frame corner")
+equal(partyAuraContainer.points[1][4], -2, "container applies the horizontal offset")
+equal(partyAuraContainer.points[1][5], 2, "container applies the vertical offset")
+
+local bleedGroup = partyAuraContainer.auraGroups.bleed
+local crowdControlGroup = partyAuraContainer.auraGroups.crowdControl
+local raidImportantGroup = partyAuraContainer.auraGroups.raidInCombat
+equal(bleedGroup.filterString, "HARMFUL|!RAID", "bleeds exclude effects the player can already dispel")
+equal(crowdControlGroup.filterString, "HARMFUL|!RAID|CROWD_CONTROL", "crowd control uses Blizzard's secure classification")
+equal(raidImportantGroup.filterString, "HARMFUL|!RAID|RAID_IN_COMBAT|!CROWD_CONTROL", "raid-important effects exclude crowd-control duplicates")
+for _, group in ipairs({ bleedGroup, crowdControlGroup, raidImportantGroup }) do
+	equal(group.maxFrameCount, 2, "each raid debuff category displays at most two icons")
+	equal(group.options.candidateFilters.isBossAura, false, "supplemental groups exclude native boss auras")
+	equal(group.options.candidateFilters.isRoleAura, false, "supplemental groups exclude native role auras")
+	equal(group.options.candidateFilters.isPriorityAura, false, "supplemental groups exclude native priority auras")
+	equal(group.options.candidateFilters.includeSpellIDs, nil, "supplemental groups never use forbidden spell-ID inclusion")
+	equal(group.options.candidateFilters.excludeSpellIDs, nil, "supplemental groups never use forbidden spell-ID exclusion")
+	equal(group.options.layout.groupSpacing, 0, "categories share a three-icon row without forcing an early wrap")
+end
+check(bleedGroup.options.candidateFilters.includeDispelTypes.Bleed, "bleed group includes only the Bleed dispel type")
+check(crowdControlGroup.options.candidateFilters.excludeDispelTypes.Bleed, "crowd-control group excludes bleed duplicates")
+check(raidImportantGroup.options.candidateFilters.excludeDispelTypes.Bleed, "raid-important group excludes bleed duplicates")
+
+local sampleAuraButton = bleedGroup.sampleButton
+equal(sampleAuraButton.width, 12, "supplemental aura buttons use the compact icon size")
+equal(sampleAuraButton.mouseClickEnabled, false, "aura icons do not intercept healing clicks")
+equal(sampleAuraButton.mouseMotionEnabled, true, "aura icons retain mouseover tooltips")
+equal(sampleAuraButton.hideTooltipInCombat, false, "secure aura tooltips remain available in combat")
+check(sampleAuraButton.icon ~= nil, "aura buttons display the secure icon texture")
+check(sampleAuraButton.durationCooldown ~= nil, "aura buttons display duration cooldowns")
+check(sampleAuraButton.applicationCount ~= nil, "aura buttons display application counts")
+check(sampleAuraButton.auraBorder ~= nil, "aura buttons display dispel-type borders")
+
+HTF:SetSetting("raidDebuffsShowBleed", false)
+equal(partyAuraContainer.auraGroups.bleed.maxFrameCount, 0, "disabling a category hides its secure aura group")
+equal(partyAuraContainer.auraGroups.crowdControl.maxFrameCount, 2, "disabling one category leaves other categories enabled")
+HTF:SetSetting("raidDebuffsShowBleed", true)
+
+check(HTF.RaidDebuffs:SetAnchor("TOPLEFT"), "valid raid debuff anchors are accepted")
+check(not HTF.RaidDebuffs:SetAnchor("CENTER"), "unsupported raid debuff anchors are rejected")
+HTF.RaidDebuffs:SetOffset("x", 7)
+HTF.RaidDebuffs:SetOffset("y", -5)
+equal(partyAuraContainer.layoutAnchor, "TOPLEFT", "changing the anchor repositions existing containers")
+equal(partyAuraContainer.growthDirection[1], AnchorUtil.FlowDirection.Right, "top-left layout grows right")
+equal(partyAuraContainer.growthDirection[2], AnchorUtil.FlowDirection.Down, "top-left layout grows down")
+equal(partyAuraContainer.points[1][4], 7, "updated horizontal offset applies immediately")
+equal(partyAuraContainer.points[1][5], -5, "updated vertical offset applies immediately")
+
+combatLocked = true
+partyMember.displayedUnit = "party2"
+CompactUnitFrame_UpdateAll(partyMember)
+equal(partyAuraContainer:GetUnit(), "party2", "existing secure containers follow unit changes during combat")
+
+local lateRaidMember = CreateFrame("Button", "CompactRaidFrame2", CompactRaidFrameContainer)
+lateRaidMember.unit = "raid2"
+lateRaidMember.displayedUnit = "raid2"
+lateRaidMember.frameType = "raid"
+table.insert(CompactRaidFrameContainer.normalFrames, lateRaidMember)
+CompactUnitFrame_UpdateAll(lateRaidMember)
+equal(HTF.RaidDebuffs:GetContainer(lateRaidMember), nil, "new secure containers are not created during combat")
+check(HTF.RaidDebuffs.pendingApply, "combat-blocked frame creation is deferred")
+
+local messagesBeforeRosterRefresh = #chatMessages
+fireEvent("GROUP_ROSTER_UPDATE")
+equal(#chatMessages, messagesBeforeRosterRefresh, "combat-time roster refreshes do not show a settings notification")
+
+HTF:SetSetting("raidDebuffsEnabled", false)
+equal(#chatMessages, messagesBeforeRosterRefresh + 1, "combat-time user setting changes show one deferred notification")
+check(partyAuraContainer:IsEnabled(), "combat-deferred disable leaves the secure container unchanged until combat ends")
+CompactUnitFrame_UpdateAll(partyMember)
+check(partyAuraContainer:IsEnabled(), "compact-frame refreshes cannot bypass a combat-deferred disable")
+combatLocked = false
+fireEvent("PLAYER_REGEN_ENABLED")
+check(not partyAuraContainer:IsEnabled(), "deferred disable applies after combat")
+check(not partyAuraContainer:IsShown(), "disabled raid debuff containers are hidden")
+check(not HTF.RaidDebuffs.pendingApply, "combat retry clears the pending flag")
+
+HTF:SetSetting("raidDebuffsEnabled", true)
+check(HTF.RaidDebuffs:GetContainer(lateRaidMember) ~= nil, "deferred raid frames attach safely after combat")
+HTF.RaidDebuffs:ResetPosition()
+equal(HTF.RaidDebuffs:GetAnchor(), "BOTTOMRIGHT", "position reset restores the default corner")
+equal(HTF.RaidDebuffs:GetOffsetX(), -2, "position reset restores the default horizontal offset")
+equal(HTF.RaidDebuffs:GetOffsetY(), 2, "position reset restores the default vertical offset")
+HTF:SetSetting("raidDebuffsEnabled", false)
 
 check(HTF.Stats.overlay ~= nil, "stats overlay is created during addon initialization")
 equal(HTF.Stats.overlay:GetName(), "HappyTreeFriendsStatsOverlay", "stats overlay has a stable frame name")
@@ -891,6 +1168,8 @@ equal(HTF.Options:GetCategoryID(), 120101, "registered category exposes its nume
 check(UISpecialFrames[1] == "HappyTreeFriendsSettingsFrame", "Escape closes the dedicated settings frame")
 check(HTF.Options.pages.nameplates ~= nil, "friendly names page is created")
 check(HTF.Options.navigation.nameplates ~= nil, "friendly names page has a navigation button")
+check(HTF.Options.pages.raidDebuffs ~= nil, "raid debuff page is created")
+check(HTF.Options.navigation.raidDebuffs ~= nil, "raid debuff page has a navigation button")
 check(HTF.Options.debugScrollFrame.ScrollBar ~= nil, "12.1 scroll template exposes its scrollbar through parentKey")
 equal(HTF.Options.debugScrollFrame:GetName(), nil, "anonymous 12.1 scroll template remains supported")
 local localizedToggle = HTF.Options.toggles[1].toggle
@@ -914,6 +1193,8 @@ contains(allCustomerCopy, HTF.L.MERCHANT_PAGE_HELP, "merchant page uses the sele
 contains(allCustomerCopy, HTF.L.STATS_PAGE_HELP, "stats page uses the selected locale")
 contains(allCustomerCopy, HTF.L.NAMEPLATES_PAGE_HELP, "friendly names page uses the selected locale")
 contains(allCustomerCopy, HTF.L.FRIENDLY_NAMES_ONLY_NOTICE, "friendly names page explains snapshot restoration")
+contains(allCustomerCopy, HTF.L.RAID_DEBUFFS_PAGE_HELP, "raid debuff page uses the selected locale")
+contains(allCustomerCopy, HTF.L.RAID_DEBUFFS_LIMIT_NOTICE, "raid debuff page explains the spell-ID limitation")
 contains(allCustomerCopy, HTF.L.DEBUG_PAGE_HELP, "debug page uses the selected locale")
 for _, developerPhrase in ipairs({ "OnUpdate", "轮询", "扫描背包", "MVP", "12.1 原生规则", "continuous polling", "bag scanning" }) do
 	check(not allCustomerCopy:find(developerPhrase, 1, true), "customer-facing UI omits developer phrase: " .. developerPhrase)
@@ -949,6 +1230,16 @@ check(friendlyNamesToggleRow ~= nil, "friendly names page exposes its mode toggl
 check(friendlyNameFontToggleRow ~= nil, "friendly names page exposes its custom-size toggle")
 check(HTF.Options.friendlyNameClassColorToggleRow == nil, "friendly names page omits the removed class-color toggle")
 equal(HTF.Options.friendlyNameFontValue:GetText(), "14", "friendly names page displays the default name font size")
+
+HTF:HandleSlashCommand("debuffs")
+check(HTF.Options:IsPageVisible("raidDebuffs"), "/htf debuffs opens the raid debuff page")
+equal(HTF.Options.raidDebuffOffsetXValue:GetText(), "-2", "raid debuff page displays the horizontal offset")
+equal(HTF.Options.raidDebuffOffsetYValue:GetText(), "2", "raid debuff page displays the vertical offset")
+check(HTF.Options.raidDebuffAnchorButtons.BOTTOMRIGHT.selected, "raid debuff page highlights the selected corner")
+HTF.Options.raidDebuffAnchorButtons.TOPLEFT.scripts.OnClick(HTF.Options.raidDebuffAnchorButtons.TOPLEFT)
+equal(HTF:GetSetting("raidDebuffsAnchor"), "TOPLEFT", "raid debuff corner controls persist their selection")
+check(HTF.Options.raidDebuffAnchorButtons.TOPLEFT.selected, "raid debuff corner controls refresh immediately")
+HTF.RaidDebuffs:ResetPosition()
 
 cvarValues[friendlyPlayerNamesCVar] = "0"
 cvarValues[friendlyPlayerNameplatesCVar] = "1"
@@ -1680,6 +1971,12 @@ contains(report, "friendlyNamesOnly: false", "diagnostic report includes friendl
 check(not report:find("friendlyNameClassColors", 1, true), "diagnostic report omits the removed class-color setting")
 contains(report, "friendlyNameCustomFontSize: false", "diagnostic report includes friendly name custom-size setting")
 contains(report, "friendlyNameFontSize: 14", "diagnostic report includes friendly name font size")
+contains(report, "raidDebuffsEnabled: false", "diagnostic report includes the raid debuff master setting")
+contains(report, "raidDebuffsShowBleed: true", "diagnostic report includes the bleed category setting")
+contains(report, "raidDebuffsAnchor: BOTTOMRIGHT", "diagnostic report includes the raid debuff corner")
+contains(report, "raidDebuffsOffset: -2, 2", "diagnostic report includes raid debuff offsets")
+contains(report, "raidDebuffsAvailable: true", "diagnostic report includes secure aura availability")
+contains(report, "raidDebuffsPending: false", "diagnostic report includes deferred raid debuff state")
 contains(report, "statsFontSize: 15", "diagnostic report includes HUD font size")
 contains(report, "statsScale: 1", "diagnostic report includes HUD scale")
 contains(report, "visibleStats: 14/14", "diagnostic report includes visible HUD stat count")

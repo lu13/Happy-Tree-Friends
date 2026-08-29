@@ -1,7 +1,7 @@
 local ADDON_NAME, HTF = ...
 
 HTF.ADDON_NAME = ADDON_NAME
-HTF.VERSION = "0.6.1"
+HTF.VERSION = "0.7.0"
 HTF.MAX_DEBUG_LOG_ENTRIES = 80
 HTF.debugLog = {}
 
@@ -13,6 +13,13 @@ HTF.defaults = {
 	friendlyNamesOnly = false,
 	friendlyNameCustomFontSize = false,
 	friendlyNameFontSize = 14,
+	raidDebuffsEnabled = false,
+	raidDebuffsShowBleed = true,
+	raidDebuffsShowCrowdControl = true,
+	raidDebuffsShowRaidInCombat = true,
+	raidDebuffsAnchor = "BOTTOMRIGHT",
+	raidDebuffsOffsetX = -2,
+	raidDebuffsOffsetY = 2,
 	showStats = true,
 	statsLocked = true,
 	statsFontSize = 15,
@@ -129,6 +136,9 @@ function HTF:SetSetting(key, value)
 	end
 	if self.Stats and self.Stats.OnSettingChanged then
 		self.Stats:OnSettingChanged(key)
+	end
+	if self.RaidDebuffs and self.RaidDebuffs.OnSettingChanged then
+		self.RaidDebuffs:OnSettingChanged(key)
 	end
 	if self.Options and self.Options.Refresh then
 		self.Options:Refresh()
@@ -251,10 +261,17 @@ function HTF:BuildDiagnosticReport()
 		"Settings:",
 	}
 
-	for _, key in ipairs({ "autoRepair", "repairFromGuild", "autoSellJunk", "friendlyNamesOnly", "friendlyNameCustomFontSize", "showStats", "statsLocked", "showNotifications", "debug" }) do
+	for _, key in ipairs({ "autoRepair", "repairFromGuild", "autoSellJunk", "friendlyNamesOnly", "friendlyNameCustomFontSize", "raidDebuffsEnabled", "raidDebuffsShowBleed", "raidDebuffsShowCrowdControl", "raidDebuffsShowRaidInCombat", "showStats", "statsLocked", "showNotifications", "debug" }) do
 		table.insert(lines, string.format("- %s: %s", key, tostring(self:GetSetting(key) == true)))
 	end
 	table.insert(lines, string.format("- friendlyNameFontSize: %s", self:SafeScalarText(self:GetSetting("friendlyNameFontSize"))))
+	table.insert(lines, string.format("- raidDebuffsAnchor: %s", self:SafeScalarText(self:GetSetting("raidDebuffsAnchor"))))
+	table.insert(lines, string.format("- raidDebuffsOffset: %s, %s", self:SafeScalarText(self:GetSetting("raidDebuffsOffsetX")), self:SafeScalarText(self:GetSetting("raidDebuffsOffsetY"))))
+	if self.RaidDebuffs then
+		table.insert(lines, string.format("- raidDebuffsAvailable: %s", tostring(self.RaidDebuffs:IsAvailable())))
+		table.insert(lines, string.format("- raidDebuffsTrackedFrames: %d", self.RaidDebuffs:GetTrackedFrameCount()))
+		table.insert(lines, string.format("- raidDebuffsPending: %s", tostring(self.RaidDebuffs.pendingApply == true)))
+	end
 	table.insert(lines, string.format("- statsFontSize: %s", self:SafeScalarText(self:GetSetting("statsFontSize"))))
 	table.insert(lines, string.format("- statsScale: %s", self:SafeScalarText(self:GetSetting("statsScale"))))
 	if self.Stats then
@@ -354,6 +371,11 @@ function HTF:HandleSlashCommand(input)
 		return
 	end
 
+	if command == "debuffs" or command == self.L.COMMAND_DEBUFFS_ALIAS then
+		self:OpenOptions("raidDebuffs")
+		return
+	end
+
 	if command == "protect" or command == self.L.COMMAND_PROTECT_ALIAS then
 		local itemID = self.Merchant and self.Merchant:ExtractItemID(argument)
 		if not itemID or not self.Merchant:SetJunkItemProtected(itemID, true) then
@@ -435,6 +457,9 @@ function HTF:Initialize()
 	end
 	if self.Stats then
 		self.Stats:Initialize()
+	end
+	if self.RaidDebuffs then
+		self.RaidDebuffs:Initialize()
 	end
 	if self.Options then
 		self.Options:Initialize()
