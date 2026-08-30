@@ -3,7 +3,9 @@ local _, HTF = ...
 local RaidDebuffs = {}
 HTF.RaidDebuffs = RaidDebuffs
 
-RaidDebuffs.ICON_SIZE = 12
+RaidDebuffs.DEFAULT_ICON_SIZE = 12
+RaidDebuffs.MIN_ICON_SIZE = 8
+RaidDebuffs.MAX_ICON_SIZE = 24
 RaidDebuffs.ICON_SPACING = 1
 RaidDebuffs.MAX_PER_CATEGORY = 2
 RaidDebuffs.MAX_OFFSET = 40
@@ -64,6 +66,7 @@ RaidDebuffs.SETTING_KEYS = {
 	raidDebuffsShowCrowdControl = true,
 	raidDebuffsShowRaidInCombat = true,
 	raidDebuffsShowShortOther = true,
+	raidDebuffsIconSize = true,
 	raidDebuffsAnchor = true,
 	raidDebuffsOffsetX = true,
 	raidDebuffsOffsetY = true,
@@ -107,8 +110,16 @@ local function clampOffset(value, fallback)
 	return math.max(-RaidDebuffs.MAX_OFFSET, math.min(RaidDebuffs.MAX_OFFSET, math.floor(value + 0.5)))
 end
 
-local function initializeAuraButton(button)
-	button:SetSize(RaidDebuffs.ICON_SIZE, RaidDebuffs.ICON_SIZE)
+local function clampIconSize(value)
+	if not HTF:IsSafeNumber(value) then
+		return RaidDebuffs.DEFAULT_ICON_SIZE
+	end
+	return math.max(RaidDebuffs.MIN_ICON_SIZE, math.min(RaidDebuffs.MAX_ICON_SIZE, math.floor(value + 0.5)))
+end
+
+function RaidDebuffs:InitializeAuraButton(button)
+	local iconSize = self:GetIconSize()
+	button:SetSize(iconSize, iconSize)
 	button:SetMouseClickEnabled(false)
 	button:SetMouseMotionEnabled(true)
 	button:SetHideTooltipInCombat(false)
@@ -202,6 +213,10 @@ function RaidDebuffs:GetOffsetY()
 	return clampOffset(HTF:GetSetting("raidDebuffsOffsetY"), 2)
 end
 
+function RaidDebuffs:GetIconSize()
+	return clampIconSize(HTF:GetSetting("raidDebuffsIconSize"))
+end
+
 function RaidDebuffs:SetAnchor(anchor)
 	if not self.ANCHORS[anchor] then
 		return false
@@ -230,6 +245,21 @@ function RaidDebuffs:AdjustOffset(axis, delta)
 	return self:SetOffset(axis, current + delta)
 end
 
+function RaidDebuffs:SetIconSize(value)
+	if not HTF:IsSafeNumber(value) then
+		return false
+	end
+	HTF:SetSetting("raidDebuffsIconSize", clampIconSize(value))
+	return true
+end
+
+function RaidDebuffs:AdjustIconSize(delta)
+	if not HTF:IsSafeNumber(delta) then
+		return false
+	end
+	return self:SetIconSize(self:GetIconSize() + delta)
+end
+
 function RaidDebuffs:ResetPosition()
 	if not HTF.db then
 		return
@@ -255,7 +285,35 @@ function RaidDebuffs:ConfigureContainerLayout(container)
 	container:SetFlowLayoutAnchorPoint(anchor)
 	container:SetFlowLayoutGrowthDirection(horizontal, vertical)
 	container:SetFlowLayoutPadding(0, 0, 0, 0)
-	container:SetFlowLayoutMaximumLineSize((self.ICON_SIZE * self.ICONS_PER_ROW) + (self.ICON_SPACING * (self.ICONS_PER_ROW - 1)))
+	local iconSize = self:GetIconSize()
+	container:SetFlowLayoutMaximumLineSize((iconSize * self.ICONS_PER_ROW) + (self.ICON_SPACING * (self.ICONS_PER_ROW - 1)))
+end
+
+function RaidDebuffs:GetGroupLayout(layoutIndex)
+	local iconSize = self:GetIconSize()
+	return {
+		elementSpacing = self.ICON_SPACING,
+		lineSpacing = self.ICON_SPACING,
+		groupSpacing = 0,
+		groupLineSpacing = self.ICON_SPACING,
+		elementWidth = iconSize,
+		elementHeight = iconSize,
+		layoutIndex = layoutIndex,
+	}
+end
+
+function RaidDebuffs:ConfigureIconSize(container)
+	local iconSize = self:GetIconSize()
+	for index, definition in ipairs(self.GROUPS) do
+		container:SetAuraGroupLayout(definition.key, self:GetGroupLayout(index))
+		local frameCount = container:GetAuraGroupFrameCount(definition.key)
+		for frameIndex = 1, frameCount do
+			local button = container:GetAuraGroupFrame(definition.key, frameIndex)
+			if button then
+				button:SetSize(iconSize, iconSize)
+			end
+		end
+	end
 end
 
 function RaidDebuffs:ConfigureCategoryVisibility(container)
@@ -275,16 +333,10 @@ function RaidDebuffs:CreateContainer(frame, unit)
 			container:AddAuraGroup(definition.key, definition.filterString, {
 				maxFrameCount = HTF:GetSetting(definition.settingKey) == true and self.MAX_PER_CATEGORY or 0,
 				candidateFilters = definition.candidateFilters,
-				initializeFrame = initializeAuraButton,
-				layout = {
-					elementSpacing = self.ICON_SPACING,
-					lineSpacing = self.ICON_SPACING,
-					groupSpacing = 0,
-					groupLineSpacing = self.ICON_SPACING,
-					elementWidth = self.ICON_SIZE,
-					elementHeight = self.ICON_SIZE,
-					layoutIndex = index,
-				},
+				initializeFrame = function(button)
+					self:InitializeAuraButton(button)
+				end,
+				layout = self:GetGroupLayout(index),
 			})
 		end
 
@@ -403,6 +455,7 @@ function RaidDebuffs:ApplySettings(notifyPending)
 		if container then
 			if enabled and self:GetFrameUnit(frame) then
 				self:ConfigureContainerLayout(container)
+				self:ConfigureIconSize(container)
 				self:ConfigureCategoryVisibility(container)
 				self:SynchronizeFrame(frame, false)
 			else

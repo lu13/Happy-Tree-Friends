@@ -14,7 +14,7 @@ Happy Tree Friends is a lightweight quality-of-life addon for **World of Warcraf
 - **Flexible HUD styling** — Show or hide each value and customize its font size and color.
 - **Friendly names** — Show friendly players as names only, with an optional custom font size.
 - **Raid debuff enhancement** — Add up to two bleeds, crowd-control effects, raid-important debuffs, and short otherwise-unclassified effects per category to Blizzard party and raid frames while keeping Blizzard's own dispellable-only setting unchanged.
-- **Compact aura controls** — Choose which debuff categories appear, select one of four frame corners, and fine-tune icon offsets.
+- **Compact aura controls** — Choose which debuff categories appear, adjust icon size from 8 to 24 pixels, select one of four frame corners, and fine-tune icon offsets.
 - **Standalone settings** — Open a clean, movable HTF settings window directly with `/htf`.
 - **Diagnostics** — English and Simplified Chinese localization, optional debug logging, and a copyable diagnostic report.
 

@@ -631,10 +631,42 @@ function Options:CreateRaidDebuffsPage(page)
 		HTF.RaidDebuffs:ResetPosition()
 	end)
 
+	local sizeCard = CreateFrame("Frame", nil, page, "BackdropTemplate")
+	sizeCard:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -452)
+	sizeCard:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, -452)
+	sizeCard:SetHeight(60)
+	applyBackdrop(sizeCard, COLORS.sidebar, COLORS.border)
+
+	local sizeTitle = createText(sizeCard, "GameFontNormal", HTF.L.RAID_DEBUFFS_ICON_SIZE, 12, COLORS.text)
+	sizeTitle:SetPoint("LEFT", 13, 0)
+	local sizeHelp = createText(sizeCard, "GameFontHighlightSmall", HTF.L.RAID_DEBUFFS_ICON_SIZE_HELP, 10, COLORS.muted)
+	sizeHelp:SetPoint("LEFT", sizeCard, "LEFT", 108, 0)
+	sizeHelp:SetWidth(285)
+	sizeHelp:SetJustifyH("LEFT")
+
+	local sizeMinus = createActionButton(sizeCard, "−")
+	self.raidDebuffIconSizeMinusButton = sizeMinus
+	sizeMinus:SetSize(28, 26)
+	sizeMinus:SetPoint("LEFT", sizeCard, "LEFT", 410, 0)
+	sizeMinus:SetScript("OnClick", function()
+		HTF.RaidDebuffs:AdjustIconSize(-1)
+	end)
+	self.raidDebuffIconSizeValue = createText(sizeCard, "GameFontNormal", "", 12, COLORS.accent)
+	self.raidDebuffIconSizeValue:SetPoint("LEFT", sizeMinus, "RIGHT", 8, 0)
+	self.raidDebuffIconSizeValue:SetWidth(30)
+	self.raidDebuffIconSizeValue:SetJustifyH("CENTER")
+	local sizePlus = createActionButton(sizeCard, "+")
+	self.raidDebuffIconSizePlusButton = sizePlus
+	sizePlus:SetSize(28, 26)
+	sizePlus:SetPoint("LEFT", self.raidDebuffIconSizeValue, "RIGHT", 8, 0)
+	sizePlus:SetScript("OnClick", function()
+		HTF.RaidDebuffs:AdjustIconSize(1)
+	end)
+
 	local note = CreateFrame("Frame", nil, page, "BackdropTemplate")
-	note:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -452)
-	note:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, -452)
-	note:SetHeight(86)
+	note:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -522)
+	note:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, -522)
+	note:SetHeight(66)
 	applyBackdrop(note, COLORS.panel, COLORS.border)
 	local noteText = createText(note, "GameFontHighlightSmall", HTF.L.RAID_DEBUFFS_LIMIT_NOTICE, 11, COLORS.muted)
 	noteText:SetPoint("TOPLEFT", 14, -13)
@@ -701,6 +733,9 @@ function Options:RefreshRaidDebuffSettings()
 	end
 	if self.raidDebuffOffsetYValue then
 		self.raidDebuffOffsetYValue:SetText(tostring(HTF.RaidDebuffs:GetOffsetY()))
+	end
+	if self.raidDebuffIconSizeValue then
+		self.raidDebuffIconSizeValue:SetText(tostring(HTF.RaidDebuffs:GetIconSize()))
 	end
 end
 

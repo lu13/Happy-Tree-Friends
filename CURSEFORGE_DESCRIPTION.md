@@ -11,6 +11,7 @@ Happy Tree Friends is a lightweight quality-of-life toolkit for **World of Warcr
 - Independent visibility, font-size, and color controls for HUD values
 - Friendly-player name-only mode with a custom font-size option
 - Secure raid-debuff categories for bleeds, crowd control, raid-important effects, and short otherwise-unclassified debuffs such as Ula'tek's Hobbled (1300938)
+- Adjustable raid-debuff icon size from 8 to 24 pixels
 - A clean standalone settings window
 - English and Simplified Chinese localization, debug logs, and copyable diagnostics
 

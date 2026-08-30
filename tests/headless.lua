@@ -390,13 +390,24 @@ function CreateFrame(kind, name, parent, template)
 				filterString = filterString,
 				options = options,
 				maxFrameCount = options.maxFrameCount,
+				frames = {},
 			}
 			self.auraGroups[key] = group
 			local auraButton = newObject("AuraButton", nil, self, "CustomAuraButtonTemplate")
 			group.sampleButton = auraButton
+			table.insert(group.frames, auraButton)
 			if options.initializeFrame then
 				options.initializeFrame(auraButton)
 			end
+		end
+		function object:GetAuraGroupFrameCount(key)
+			return #self.auraGroups[key].frames
+		end
+		function object:GetAuraGroupFrame(key, index)
+			return self.auraGroups[key].frames[index]
+		end
+		function object:SetAuraGroupLayout(key, layout)
+			self.auraGroups[key].options.layout = layout
 		end
 		function object:SetAuraGroupMaxFrameCount(key, maximum)
 			self.auraGroups[key].maxFrameCount = maximum
@@ -907,7 +918,7 @@ for _, path in ipairs({
 end
 
 fireEvent("ADDON_LOADED", "HappyTreeFriends")
-equal(HTF.VERSION, "0.7.1", "addon version")
+equal(HTF.VERSION, "0.7.2", "addon version")
 equal(HTF.LOCALE, testLocale, "addon selects the active supported locale")
 equal(HTF.CLIENT_LOCALE, testLocale, "addon records the client locale")
 equal(HTF.L.SETTINGS, testLocale == "zhCN" and "设置" or "Settings", "selected locale exposes translated settings text")
@@ -923,7 +934,7 @@ for _, definition in ipairs(HTF.Stats.STAT_DEFINITIONS) do
 	check(HTF.LOCALES.zhCN[definition.fallbackKey] ~= nil, "zhCN stat fallback exists: " .. definition.key)
 end
 local formatCases = {
-	VERSION_LABEL = { "0.7.1" },
+	VERSION_LABEL = { "0.7.2" },
 	REPAIRED_PERSONAL = { "1g" },
 	REPAIRED_GUILD = { "1g" },
 	REPAIRED_MIXED = { "1g" },
@@ -965,6 +976,7 @@ equal(HTF:GetSetting("raidDebuffsShowBleed"), true, "bleed category defaults on"
 equal(HTF:GetSetting("raidDebuffsShowCrowdControl"), true, "crowd-control category defaults on")
 equal(HTF:GetSetting("raidDebuffsShowRaidInCombat"), true, "raid-important category defaults on")
 equal(HTF:GetSetting("raidDebuffsShowShortOther"), true, "short-other category defaults on")
+equal(HTF:GetSetting("raidDebuffsIconSize"), 12, "raid debuff icons default to twelve pixels")
 equal(HTF:GetSetting("raidDebuffsAnchor"), "BOTTOMRIGHT", "raid debuff icons default to the bottom-right corner")
 equal(HTF:GetSetting("raidDebuffsOffsetX"), -2, "raid debuff icons have a safe horizontal offset")
 equal(HTF:GetSetting("raidDebuffsOffsetY"), 2, "raid debuff icons have a safe vertical offset")
@@ -1061,6 +1073,22 @@ check(sampleAuraButton.durationCooldown ~= nil, "aura buttons display duration c
 check(sampleAuraButton.applicationCount ~= nil, "aura buttons display application counts")
 check(sampleAuraButton.auraBorder ~= nil, "aura buttons display dispel-type borders")
 
+check(not HTF.RaidDebuffs:SetIconSize("large"), "non-numeric raid debuff icon sizes are rejected")
+check(HTF.RaidDebuffs:SetIconSize(16), "valid raid debuff icon sizes are accepted")
+equal(HTF:GetSetting("raidDebuffsIconSize"), 16, "raid debuff icon size persists")
+equal(sampleAuraButton.width, 16, "existing secure aura buttons resize out of combat")
+equal(bleedGroup.options.layout.elementWidth, 16, "aura group layout width follows the icon size")
+equal(bleedGroup.options.layout.elementHeight, 16, "aura group layout height follows the icon size")
+equal(partyAuraContainer.maximumLineSize, 67, "four-icon wrapping width follows the icon size")
+HTF.RaidDebuffs:SetIconSize(99)
+equal(HTF:GetSetting("raidDebuffsIconSize"), 24, "raid debuff icon size clamps to the safe maximum")
+equal(sampleAuraButton.width, 24, "maximum icon size applies to existing aura buttons")
+HTF.RaidDebuffs:SetIconSize(1)
+equal(HTF:GetSetting("raidDebuffsIconSize"), 8, "raid debuff icon size clamps to the safe minimum")
+equal(sampleAuraButton.width, 8, "minimum icon size applies to existing aura buttons")
+HTF.RaidDebuffs:SetIconSize(12)
+equal(sampleAuraButton.width, 12, "raid debuff icon size can return to its default")
+
 HTF:SetSetting("raidDebuffsShowBleed", false)
 equal(partyAuraContainer.auraGroups.bleed.maxFrameCount, 0, "disabling a category hides its secure aura group")
 equal(partyAuraContainer.auraGroups.crowdControl.maxFrameCount, 2, "disabling one category leaves other categories enabled")
@@ -1078,6 +1106,16 @@ equal(partyAuraContainer.growthDirection[1], AnchorUtil.FlowDirection.Right, "to
 equal(partyAuraContainer.growthDirection[2], AnchorUtil.FlowDirection.Down, "top-left layout grows down")
 equal(partyAuraContainer.points[1][4], 7, "updated horizontal offset applies immediately")
 equal(partyAuraContainer.points[1][5], -5, "updated vertical offset applies immediately")
+
+combatLocked = true
+HTF.RaidDebuffs:SetIconSize(18)
+equal(sampleAuraButton.width, 12, "combat-time icon size changes do not mutate secure buttons immediately")
+check(HTF.RaidDebuffs.pendingApply, "combat-time icon size changes are deferred")
+combatLocked = false
+fireEvent("PLAYER_REGEN_ENABLED")
+equal(sampleAuraButton.width, 18, "deferred icon size applies after combat")
+equal(partyAuraContainer.maximumLineSize, 75, "deferred icon size also updates wrapping width")
+HTF.RaidDebuffs:SetIconSize(12)
 
 combatLocked = true
 partyMember.displayedUnit = "party2"
@@ -1243,6 +1281,12 @@ HTF:HandleSlashCommand("debuffs")
 check(HTF.Options:IsPageVisible("raidDebuffs"), "/htf debuffs opens the raid debuff page")
 equal(HTF.Options.raidDebuffOffsetXValue:GetText(), "-2", "raid debuff page displays the horizontal offset")
 equal(HTF.Options.raidDebuffOffsetYValue:GetText(), "2", "raid debuff page displays the vertical offset")
+equal(HTF.Options.raidDebuffIconSizeValue:GetText(), "12", "raid debuff page displays the saved icon size")
+HTF.Options.raidDebuffIconSizePlusButton.scripts.OnClick(HTF.Options.raidDebuffIconSizePlusButton)
+equal(HTF:GetSetting("raidDebuffsIconSize"), 13, "raid debuff size control persists increments")
+equal(HTF.Options.raidDebuffIconSizeValue:GetText(), "13", "raid debuff size control refreshes immediately")
+HTF.Options.raidDebuffIconSizeMinusButton.scripts.OnClick(HTF.Options.raidDebuffIconSizeMinusButton)
+equal(HTF:GetSetting("raidDebuffsIconSize"), 12, "raid debuff size control persists decrements")
 check(HTF.Options.raidDebuffAnchorButtons.BOTTOMRIGHT.selected, "raid debuff page highlights the selected corner")
 HTF.Options.raidDebuffAnchorButtons.TOPLEFT.scripts.OnClick(HTF.Options.raidDebuffAnchorButtons.TOPLEFT)
 equal(HTF:GetSetting("raidDebuffsAnchor"), "TOPLEFT", "raid debuff corner controls persist their selection")
@@ -1983,6 +2027,7 @@ contains(report, "raidDebuffsEnabled: false", "diagnostic report includes the ra
 contains(report, "raidDebuffsShowBleed: true", "diagnostic report includes the bleed category setting")
 contains(report, "raidDebuffsShowShortOther: true", "diagnostic report includes the short-other category setting")
 contains(report, "raidDebuffsAnchor: BOTTOMRIGHT", "diagnostic report includes the raid debuff corner")
+contains(report, "raidDebuffsIconSize: 12", "diagnostic report includes the raid debuff icon size")
 contains(report, "raidDebuffsOffset: -2, 2", "diagnostic report includes raid debuff offsets")
 contains(report, "raidDebuffsAvailable: true", "diagnostic report includes secure aura availability")
 contains(report, "raidDebuffsPending: false", "diagnostic report includes deferred raid debuff state")

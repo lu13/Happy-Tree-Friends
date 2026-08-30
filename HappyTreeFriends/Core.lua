@@ -1,7 +1,7 @@
 local ADDON_NAME, HTF = ...
 
 HTF.ADDON_NAME = ADDON_NAME
-HTF.VERSION = "0.7.1"
+HTF.VERSION = "0.7.2"
 HTF.MAX_DEBUG_LOG_ENTRIES = 80
 HTF.debugLog = {}
 
@@ -18,6 +18,7 @@ HTF.defaults = {
 	raidDebuffsShowCrowdControl = true,
 	raidDebuffsShowRaidInCombat = true,
 	raidDebuffsShowShortOther = true,
+	raidDebuffsIconSize = 12,
 	raidDebuffsAnchor = "BOTTOMRIGHT",
 	raidDebuffsOffsetX = -2,
 	raidDebuffsOffsetY = 2,
@@ -267,6 +268,7 @@ function HTF:BuildDiagnosticReport()
 	end
 	table.insert(lines, string.format("- friendlyNameFontSize: %s", self:SafeScalarText(self:GetSetting("friendlyNameFontSize"))))
 	table.insert(lines, string.format("- raidDebuffsAnchor: %s", self:SafeScalarText(self:GetSetting("raidDebuffsAnchor"))))
+	table.insert(lines, string.format("- raidDebuffsIconSize: %s", self:SafeScalarText(self:GetSetting("raidDebuffsIconSize"))))
 	table.insert(lines, string.format("- raidDebuffsOffset: %s, %s", self:SafeScalarText(self:GetSetting("raidDebuffsOffsetX")), self:SafeScalarText(self:GetSetting("raidDebuffsOffsetY"))))
 	if self.RaidDebuffs then
 		table.insert(lines, string.format("- raidDebuffsAvailable: %s", tostring(self.RaidDebuffs:IsAvailable())))
