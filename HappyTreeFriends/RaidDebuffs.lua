@@ -133,6 +133,7 @@ function RaidDebuffs:InitializeAuraButton(button)
 	local cooldown = CreateFrame("Cooldown", nil, button, "CooldownFrameTemplate")
 	cooldown:SetAllPoints(button)
 	cooldown:SetDrawEdge(false)
+	cooldown:SetReverse(true)
 	cooldown:SetHideCountdownNumbers(true)
 	button:SetDurationCooldown(cooldown)
 

@@ -256,6 +256,10 @@ function objectMethods:SetDrawEdge(enabled)
 	self.drawEdge = enabled == true
 end
 
+function objectMethods:SetReverse(reverse)
+	self.reverse = reverse == true
+end
+
 function objectMethods:SetHideCountdownNumbers(hidden)
 	self.hideCountdownNumbers = hidden == true
 end
@@ -918,7 +922,7 @@ for _, path in ipairs({
 end
 
 fireEvent("ADDON_LOADED", "HappyTreeFriends")
-equal(HTF.VERSION, "0.7.2", "addon version")
+equal(HTF.VERSION, "0.7.3", "addon version")
 equal(HTF.LOCALE, testLocale, "addon selects the active supported locale")
 equal(HTF.CLIENT_LOCALE, testLocale, "addon records the client locale")
 equal(HTF.L.SETTINGS, testLocale == "zhCN" and "设置" or "Settings", "selected locale exposes translated settings text")
@@ -934,7 +938,7 @@ for _, definition in ipairs(HTF.Stats.STAT_DEFINITIONS) do
 	check(HTF.LOCALES.zhCN[definition.fallbackKey] ~= nil, "zhCN stat fallback exists: " .. definition.key)
 end
 local formatCases = {
-	VERSION_LABEL = { "0.7.2" },
+	VERSION_LABEL = { "0.7.3" },
 	REPAIRED_PERSONAL = { "1g" },
 	REPAIRED_GUILD = { "1g" },
 	REPAIRED_MIXED = { "1g" },
@@ -1070,6 +1074,7 @@ equal(sampleAuraButton.mouseMotionEnabled, true, "aura icons retain mouseover to
 equal(sampleAuraButton.hideTooltipInCombat, false, "secure aura tooltips remain available in combat")
 check(sampleAuraButton.icon ~= nil, "aura buttons display the secure icon texture")
 check(sampleAuraButton.durationCooldown ~= nil, "aura buttons display duration cooldowns")
+equal(sampleAuraButton.durationCooldown.reverse, true, "duration shading starts bright and darkens as the aura expires")
 check(sampleAuraButton.applicationCount ~= nil, "aura buttons display application counts")
 check(sampleAuraButton.auraBorder ~= nil, "aura buttons display dispel-type borders")
 
