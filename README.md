@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-Happy Tree Friends is a lightweight quality-of-life addon for **World of Warcraft Retail 12.1**. It brings secure raid-debuff enhancements, merchant automation, a customizable character HUD, and friendly-player name controls together in one clean settings window.
+Happy Tree Friends is a lightweight quality-of-life addon for **World of Warcraft Retail 12.1**. It brings secure raid-debuff enhancements, merchant automation, and friendly-player name controls together in one clean settings window.
 
 ## Features
 
@@ -10,8 +10,6 @@ Happy Tree Friends is a lightweight quality-of-life addon for **World of Warcraf
 - **Automatic junk selling** — Sell grey-quality items when visiting a merchant.
 - **Protected junk items** — Keep selected grey items by item link or ID.
 - **Session ledger** — Review repair spending, junk-sale income, and protected items skipped during the current session.
-- **Adventure HUD** — Display character stats, durability, free bag slots, money, and latency in a movable, resizable, lockable transparent overlay.
-- **Flexible HUD styling** — Show or hide each value and customize its font size and color.
 - **Friendly names** — Show friendly players as names only, with an optional custom font size.
 - **Raid debuff enhancement** — Add up to two bleeds, crowd-control effects, raid-important debuffs, and short otherwise-unclassified effects per category to Blizzard party and raid frames while keeping Blizzard's own dispellable-only setting unchanged.
 - **Compact aura controls** — Choose which debuff categories appear, adjust icon size from 8 to 24 pixels, select one of four frame corners, and fine-tune icon offsets. Duration shading starts bright and darkens as an effect expires.
@@ -21,7 +19,6 @@ Happy Tree Friends is a lightweight quality-of-life addon for **World of Warcraf
 ## Commands
 
 - `/htf` — Open settings.
-- `/htf stats` — Open HUD settings.
 - `/htf merchant` — Open merchant settings.
 - `/htf nameplates` — Open friendly-name settings.
 - `/htf debuffs` — Open raid-debuff enhancement settings.

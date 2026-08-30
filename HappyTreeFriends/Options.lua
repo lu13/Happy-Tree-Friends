@@ -282,7 +282,6 @@ function Options:CreateOverviewPage(page)
 		{ key = "autoSellJunk", label = HTF.L.AUTO_SELL_JUNK },
 		{ key = "friendlyNamesOnly", label = HTF.L.FRIENDLY_NAMES_ONLY },
 		{ key = "raidDebuffsEnabled", label = HTF.L.RAID_DEBUFFS },
-		{ key = "showStats", label = HTF.L.CHARACTER_STATS },
 		{ key = "debug", label = HTF.L.DEBUG_MODE },
 	}
 
@@ -345,134 +344,6 @@ function Options:CreateMerchantPage(page)
 	self.merchantLedgerText:SetPoint("TOPRIGHT", ledger, "TOPRIGHT", -14, -39)
 	self.merchantLedgerText:SetJustifyH("LEFT")
 	self.merchantLedgerText:SetJustifyV("TOP")
-end
-
-function Options:CreateStatSettingRow(parent, column, yOffset, key, label)
-	local row = CreateFrame("Button", nil, parent, "BackdropTemplate")
-	anchorTwoColumnRow(row, parent, column, yOffset)
-	row:SetHeight(29)
-	applyBackdrop(row, COLORS.panel, COLORS.border)
-
-	row.indicator = row:CreateTexture(nil, "ARTWORK")
-	row.indicator:SetTexture("Interface\\Buttons\\WHITE8x8")
-	row.indicator:SetSize(11, 11)
-	row.indicator:SetPoint("LEFT", 10, 0)
-
-	row.label = createText(row, "GameFontHighlightSmall", label, 11, COLORS.text)
-	row.label:SetPoint("LEFT", row.indicator, "RIGHT", 8, 0)
-
-	row.state = createText(row, "GameFontHighlightSmall", "", 10, COLORS.muted)
-	row.state:SetPoint("RIGHT", row, "RIGHT", -43, 0)
-
-	row.colorButton = CreateFrame("Button", nil, row, "BackdropTemplate")
-	row.colorButton:SetSize(24, 17)
-	row.colorButton:SetPoint("RIGHT", row, "RIGHT", -10, 0)
-	applyBackdrop(row.colorButton, COLORS.panelHover, COLORS.border)
-	row.colorButton.swatch = row.colorButton:CreateTexture(nil, "ARTWORK")
-	row.colorButton.swatch:SetPoint("TOPLEFT", 3, -3)
-	row.colorButton.swatch:SetPoint("BOTTOMRIGHT", -3, 3)
-	row.colorButton.swatch:SetTexture("Interface\\Buttons\\WHITE8x8")
-	row.colorButton:SetScript("OnClick", function()
-		self:OpenStatColorPicker(key)
-	end)
-
-	function row:Render(visible, r, g, b)
-		self.colorButton.swatch:SetColorTexture(r, g, b, 1)
-		if visible then
-			self.indicator:SetColorTexture(COLORS.accent[1], COLORS.accent[2], COLORS.accent[3], 1)
-			self.label:SetTextColor(r, g, b, 1)
-			self.state:SetText(HTF.L.STAT_VISIBLE)
-			self.state:SetTextColor(COLORS.accent[1], COLORS.accent[2], COLORS.accent[3], 1)
-		else
-			self.indicator:SetColorTexture(COLORS.disabled[1], COLORS.disabled[2], COLORS.disabled[3], 1)
-			self.label:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3], COLORS.muted[4])
-			self.state:SetText(HTF.L.STAT_HIDDEN)
-			self.state:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3], COLORS.muted[4])
-		end
-	end
-
-	row:SetScript("OnEnter", function(self)
-		self:SetBackdropColor(COLORS.panelHover[1], COLORS.panelHover[2], COLORS.panelHover[3], COLORS.panelHover[4])
-	end)
-	row:SetScript("OnLeave", function(self)
-		self:SetBackdropColor(COLORS.panel[1], COLORS.panel[2], COLORS.panel[3], COLORS.panel[4])
-	end)
-	row:SetScript("OnClick", function()
-		HTF.Stats:SetStatVisible(key, not HTF.Stats:IsStatVisible(key))
-	end)
-
-	self.statSettingRows[key] = row
-	return row
-end
-
-function Options:CreateStatsPage(page)
-	self:AddPageHeader(page, HTF.L.CHARACTER_STATS, HTF.L.STATS_PAGE_HELP)
-	self.statsDisplayToggleRow = self:CreateCompactToggleRow(page, "left", -84, "showStats", HTF.L.SHOW_STATS, HTF.L.SHOW_STATS_DESC)
-	self.statsLockToggleRow = self:CreateCompactToggleRow(page, "right", -84, "statsLocked", HTF.L.LOCK_STATS, HTF.L.LOCK_STATS_DESC)
-
-	local controlCard = CreateFrame("Frame", nil, page, "BackdropTemplate")
-	controlCard:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -150)
-	controlCard:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, -150)
-	controlCard:SetHeight(52)
-	applyBackdrop(controlCard, COLORS.sidebar, COLORS.border)
-
-	local fontLabel = createText(controlCard, "GameFontNormal", HTF.L.STATS_FONT_SIZE, 12, COLORS.text)
-	fontLabel:SetPoint("LEFT", 13, 0)
-
-	local minusButton = createActionButton(controlCard, "−")
-	minusButton:SetSize(28, 26)
-	minusButton:SetPoint("LEFT", fontLabel, "RIGHT", 12, 0)
-	minusButton:SetScript("OnClick", function()
-		HTF.Stats:SetFontSize(HTF.Stats:GetFontSize() - 1)
-	end)
-
-	self.statsFontValue = createText(controlCard, "GameFontNormal", "", 12, COLORS.accent)
-	self.statsFontValue:SetPoint("LEFT", minusButton, "RIGHT", 10, 0)
-	self.statsFontValue:SetWidth(24)
-	self.statsFontValue:SetJustifyH("CENTER")
-
-	local plusButton = createActionButton(controlCard, "+")
-	plusButton:SetSize(28, 26)
-	plusButton:SetPoint("LEFT", self.statsFontValue, "RIGHT", 10, 0)
-	plusButton:SetScript("OnClick", function()
-		HTF.Stats:SetFontSize(HTF.Stats:GetFontSize() + 1)
-	end)
-
-	local resetColorsButton = createActionButton(controlCard, HTF.L.STATS_RESET_COLORS)
-	resetColorsButton:SetSize(96, 26)
-	resetColorsButton:SetPoint("RIGHT", controlCard, "RIGHT", -12, 0)
-	resetColorsButton:SetScript("OnClick", function()
-		HTF.Stats:ResetColors()
-	end)
-
-	local resetPositionButton = createActionButton(controlCard, HTF.L.STATS_RESET_POSITION)
-	resetPositionButton:SetSize(110, 26)
-	resetPositionButton:SetPoint("RIGHT", resetColorsButton, "LEFT", -8, 0)
-	resetPositionButton:SetScript("OnClick", function()
-		HTF.Stats:ResetPosition()
-	end)
-
-	local listTitle = createText(page, "GameFontNormal", HTF.L.STATS_DISPLAY_ITEMS, 12, COLORS.text)
-	listTitle:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -216)
-
-	self.statSettingRows = {}
-	for index, definition in ipairs(HTF.Stats.STAT_DEFINITIONS) do
-		local column = index <= 7 and "left" or "right"
-		local rowIndex = column == "left" and index or index - 7
-		self:CreateStatSettingRow(page, column, -242 - (rowIndex - 1) * 34, definition.key, HTF.Stats:GetStatLabel(definition.key))
-	end
-
-	local adventureTitle = createText(page, "GameFontNormal", HTF.L.ADVENTURE_STATUS_ITEMS, 12, COLORS.text)
-	adventureTitle:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -486)
-	local adventureHelp = createText(page, "GameFontHighlightSmall", HTF.L.ADVENTURE_STATUS_HELP, 10, COLORS.muted)
-	adventureHelp:SetPoint("RIGHT", page, "RIGHT", -20, -486)
-	adventureHelp:SetJustifyH("RIGHT")
-
-	for index, definition in ipairs(HTF.Stats.ADVENTURE_DEFINITIONS) do
-		local column = index <= 2 and "left" or "right"
-		local rowIndex = column == "left" and index or index - 2
-		self:CreateStatSettingRow(page, column, -512 - (rowIndex - 1) * 34, definition.key, HTF.Stats:GetStatLabel(definition.key))
-	end
 end
 
 function Options:CreateNameplatesPage(page)
@@ -675,45 +546,6 @@ function Options:CreateRaidDebuffsPage(page)
 	noteText:SetJustifyV("TOP")
 end
 
-function Options:OpenStatColorPicker(key)
-	if not HTF.Stats or type(ColorPickerFrame) ~= "table" or type(ColorPickerFrame.SetupColorPickerAndShow) ~= "function" then
-		HTF:Notify(HTF.L.COLOR_PICKER_UNAVAILABLE)
-		return
-	end
-
-	local originalR, originalG, originalB = HTF.Stats:GetStatColor(key)
-	ColorPickerFrame:SetupColorPickerAndShow({
-		r = originalR,
-		g = originalG,
-		b = originalB,
-		hasOpacity = false,
-		swatchFunc = function()
-			local r, g, b = ColorPickerFrame:GetColorRGB()
-			HTF.Stats:SetStatColor(key, r, g, b)
-		end,
-		cancelFunc = function(previousValues)
-			local r = type(previousValues) == "table" and previousValues.r or originalR
-			local g = type(previousValues) == "table" and previousValues.g or originalG
-			local b = type(previousValues) == "table" and previousValues.b or originalB
-			HTF.Stats:SetStatColor(key, r, g, b)
-		end,
-	})
-end
-
-function Options:RefreshStatSettings()
-	if not HTF.Stats then
-		return
-	end
-	if self.statsFontValue then
-		self.statsFontValue:SetText(tostring(HTF.Stats:GetFontSize()))
-	end
-	if self.statSettingRows then
-		for key in pairs(self.statSettingRows) do
-			self:RefreshStatSetting(key)
-		end
-	end
-end
-
 function Options:RefreshFriendlyNameSettings()
 	if self.friendlyNameFontValue and HTF.FriendlyNames and HTF.FriendlyNames.GetFontSize then
 		self.friendlyNameFontValue:SetText(tostring(HTF.FriendlyNames:GetFontSize()))
@@ -737,15 +569,6 @@ function Options:RefreshRaidDebuffSettings()
 	if self.raidDebuffIconSizeValue then
 		self.raidDebuffIconSizeValue:SetText(tostring(HTF.RaidDebuffs:GetIconSize()))
 	end
-end
-
-function Options:RefreshStatSetting(key)
-	local row = self.statSettingRows and self.statSettingRows[key]
-	if not row or not HTF.Stats then
-		return
-	end
-	local r, g, b = HTF.Stats:GetStatColor(key)
-	row:Render(HTF.Stats:IsStatVisible(key), r, g, b)
 end
 
 function Options:CreateDebugPage(page)
@@ -917,10 +740,9 @@ function Options:CreatePanel()
 
 	self:CreateNavigationButton(sidebar, "overview", HTF.L.OVERVIEW, -116)
 	self:CreateNavigationButton(sidebar, "merchant", HTF.L.MERCHANT, -160)
-	self:CreateNavigationButton(sidebar, "stats", HTF.L.CHARACTER_STATS, -204)
-	self:CreateNavigationButton(sidebar, "nameplates", HTF.L.NAMEPLATES, -248)
-	self:CreateNavigationButton(sidebar, "raidDebuffs", HTF.L.RAID_DEBUFFS, -292)
-	self:CreateNavigationButton(sidebar, "debug", HTF.L.DEBUG, -336)
+	self:CreateNavigationButton(sidebar, "nameplates", HTF.L.NAMEPLATES, -204)
+	self:CreateNavigationButton(sidebar, "raidDebuffs", HTF.L.RAID_DEBUFFS, -248)
+	self:CreateNavigationButton(sidebar, "debug", HTF.L.DEBUG, -292)
 
 	local sidebarHelp = createText(sidebar, "GameFontHighlightSmall", "/htf", 12, COLORS.accent)
 	sidebarHelp:SetPoint("BOTTOMLEFT", 18, 23)
@@ -931,7 +753,7 @@ function Options:CreatePanel()
 	content:SetPoint("TOPLEFT", sidebar, "TOPRIGHT", 1, 0)
 	content:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 0)
 
-	for _, key in ipairs({ "overview", "merchant", "stats", "nameplates", "raidDebuffs", "debug" }) do
+	for _, key in ipairs({ "overview", "merchant", "nameplates", "raidDebuffs", "debug" }) do
 		local page = CreateFrame("Frame", nil, content)
 		page:SetAllPoints(content)
 		page:Hide()
@@ -940,7 +762,6 @@ function Options:CreatePanel()
 
 	self:CreateOverviewPage(self.pages.overview)
 	self:CreateMerchantPage(self.pages.merchant)
-	self:CreateStatsPage(self.pages.stats)
 	self:CreateNameplatesPage(self.pages.nameplates)
 	self:CreateRaidDebuffsPage(self.pages.raidDebuffs)
 	self:CreateDebugPage(self.pages.debug)
@@ -1025,7 +846,6 @@ function Options:SelectPage(key)
 	end
 
 	self:RefreshOverview()
-	self:RefreshStatSettings()
 	self:RefreshFriendlyNameSettings()
 	self:RefreshRaidDebuffSettings()
 	self:RefreshMerchantLedger()
@@ -1084,7 +904,6 @@ function Options:Refresh()
 		row.toggle:Render(HTF:GetSetting(row.settingKey))
 	end
 	self:RefreshOverview()
-	self:RefreshStatSettings()
 	self:RefreshFriendlyNameSettings()
 	self:RefreshRaidDebuffSettings()
 	self:RefreshMerchantLedger()

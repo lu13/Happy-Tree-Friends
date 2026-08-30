@@ -887,7 +887,17 @@ function ColorPickerFrame:GetColorRGB()
 	return self.r, self.g, self.b
 end
 
-HappyTreeFriendsDB = { debugLog = {}, friendlyNameClassColors = true }
+HappyTreeFriendsDB = {
+	debugLog = {},
+	friendlyNameClassColors = true,
+	showStats = true,
+	statsLocked = false,
+	statsFontSize = 19,
+	statsScale = 1.5,
+	statsPosition = { point = "CENTER", x = 10, y = 20 },
+	statsVisibility = { strength = false },
+	statsColors = { strength = { 1, 0, 0 } },
+}
 for index = 1, 82 do
 	if index == 10 then
 		HappyTreeFriendsDB.debugLog[index] = false
@@ -913,7 +923,6 @@ for _, path in ipairs({
 	"HappyTreeFriends/RaidDebuffs.lua",
 	"HappyTreeFriends/FriendlyNames.lua",
 	"HappyTreeFriends/Merchant.lua",
-	"HappyTreeFriends/Stats.lua",
 	"HappyTreeFriends/Options.lua",
 }) do
 	local chunk, loadError = loadfile(path)
@@ -922,7 +931,7 @@ for _, path in ipairs({
 end
 
 fireEvent("ADDON_LOADED", "HappyTreeFriends")
-equal(HTF.VERSION, "0.7.3", "addon version")
+equal(HTF.VERSION, "0.8.0", "addon version")
 equal(HTF.LOCALE, testLocale, "addon selects the active supported locale")
 equal(HTF.CLIENT_LOCALE, testLocale, "addon records the client locale")
 equal(HTF.L.SETTINGS, testLocale == "zhCN" and "设置" or "Settings", "selected locale exposes translated settings text")
@@ -933,12 +942,8 @@ end
 for key in pairs(HTF.LOCALES.zhCN) do
 	check(HTF.LOCALES.enUS[key] ~= nil, "English locale includes zhCN key: " .. key)
 end
-for _, definition in ipairs(HTF.Stats.STAT_DEFINITIONS) do
-	check(HTF.LOCALES.enUS[definition.fallbackKey] ~= nil, "English stat fallback exists: " .. definition.key)
-	check(HTF.LOCALES.zhCN[definition.fallbackKey] ~= nil, "zhCN stat fallback exists: " .. definition.key)
-end
 local formatCases = {
-	VERSION_LABEL = { "0.7.3" },
+	VERSION_LABEL = { "0.8.0" },
 	REPAIRED_PERSONAL = { "1g" },
 	REPAIRED_GUILD = { "1g" },
 	REPAIRED_MIXED = { "1g" },
@@ -952,8 +957,6 @@ local formatCases = {
 	JUNK_PROTECTION_LIST = { "#1001" },
 	DEBUG_REPAIR_COMPLETED = { "1g", "personal" },
 	DEBUG_JUNK_SOLD = { 3 },
-	DEBUG_STATS_POSITION_SAVED = { "TOP", "TOP", 1, -1 },
-	DEBUG_STAT_VISIBILITY_UPDATED = { "haste", "true" },
 	DEBUG_FRIENDLY_NAMES_CVAR_FAILED = { friendlyPlayerNamesCVar },
 	DEBUG_RAID_DEBUFFS_ATTACHED = { "raid1" },
 	DEBUG_RAID_DEBUFFS_UNAVAILABLE = { "error" },
@@ -984,11 +987,10 @@ equal(HTF:GetSetting("raidDebuffsIconSize"), 12, "raid debuff icons default to t
 equal(HTF:GetSetting("raidDebuffsAnchor"), "BOTTOMRIGHT", "raid debuff icons default to the bottom-right corner")
 equal(HTF:GetSetting("raidDebuffsOffsetX"), -2, "raid debuff icons have a safe horizontal offset")
 equal(HTF:GetSetting("raidDebuffsOffsetY"), 2, "raid debuff icons have a safe vertical offset")
-equal(HTF:GetSetting("statsLocked"), true, "stats overlay defaults locked")
-equal(HTF:GetSetting("statsFontSize"), 15, "stats overlay default font size")
-equal(HTF:GetSetting("statsScale"), 1, "stats overlay default scale")
-equal(HTF.Stats:GetVisibleStatCount(), 14, "all stats default visible")
-equal(HTF.Stats:GetVisibleAdventureStatusCount(), 0, "adventure status defaults hidden")
+for _, key in ipairs({ "showStats", "statsLocked", "statsFontSize", "statsScale", "statsPosition", "statsVisibility", "statsColors" }) do
+	equal(HTF.db[key], nil, "removed stats setting is cleared during migration: " .. key)
+end
+equal(HTF.Stats, nil, "removed stats module is not loaded")
 
 check(HTF.RaidDebuffs:IsAvailable(), "secure raid debuff API is available in the test client")
 check(HTF.RaidDebuffs.eventFrame.events.PLAYER_REGEN_ENABLED, "raid debuff module retries after combat")
@@ -1159,52 +1161,12 @@ equal(HTF.RaidDebuffs:GetOffsetX(), -2, "position reset restores the default hor
 equal(HTF.RaidDebuffs:GetOffsetY(), 2, "position reset restores the default vertical offset")
 HTF:SetSetting("raidDebuffsEnabled", false)
 
-check(HTF.Stats.overlay ~= nil, "stats overlay is created during addon initialization")
-equal(HTF.Stats.overlay:GetName(), "HappyTreeFriendsStatsOverlay", "stats overlay has a stable frame name")
-check(HTF.Stats.overlay:IsShown(), "stats overlay defaults visible")
-for _, event in ipairs({ "SPEED_UPDATE", "LIFESTEAL_UPDATE", "AVOIDANCE_UPDATE", "PLAYER_DAMAGE_DONE_MODS" }) do
-	check(HTF.Stats.eventFrame.events[event], "stats HUD listens for live updates from " .. event)
-end
-for _, event in ipairs({ "UNIT_STATS", "UNIT_AURA", "UNIT_SPELL_HASTE" }) do
-	equal(HTF.Stats.eventFrame.unitEvents[event][1], "player", "stats HUD limits " .. event .. " to the player")
-end
-equal(HTF.Stats.overlay.mouseEnabled, false, "locked overlay does not intercept mouse input")
-equal(HTF.Stats.overlay.backdropColor[4], 0, "locked overlay background is transparent")
-equal(HTF.Stats.overlay.backdropBorderColor[4], 0, "locked overlay border is transparent")
-check(not HTF.Stats.overlay.title:IsShown(), "locked overlay hides its drag hint")
-check(HTF.Stats.overlay.movable, "stats overlay is movable")
-check(HTF.Stats.overlay.resizable, "stats overlay supports native resizing")
-check(HTF.Stats.overlay.clampedToScreen, "stats overlay stays clamped to screen")
-equal(HTF.Stats.overlay.dragButtons[1], "LeftButton", "stats overlay uses left-button drag")
-equal(HTF.Stats.overlay:GetScale(), 1, "stats overlay applies its default scale")
-check(HTF.Stats.overlay.resizeHandle ~= nil, "stats overlay has a resize handle")
-equal(HTF.Stats.overlay.resizeHandle.dragButtons[1], "LeftButton", "resize handle uses left-button drag")
-check(not HTF.Stats.overlay.resizeHandle:IsShown(), "locked overlay hides its resize handle")
-equal(HTF.Stats.overlay.rows.strength.fontSize, 15, "overlay applies the configured font size")
-equal(HTF.Stats.overlay.rows.strength.fontFlags, "THICKOUTLINE", "overlay stat text uses a thick outline")
-equal(HTF.Stats.overlay.rows.strength.shadowColor[4], 1, "overlay stat text uses an opaque black shadow")
-equal(HTF.Stats.overlay.rows.strength.shadowOffset[1], 2, "overlay stat shadow has a visible horizontal offset")
-equal(HTF.Stats.overlay.rows.strength.shadowOffset[2], -2, "overlay stat shadow has a visible vertical offset")
-equal(HTF.Stats.overlay.status.fontFlags, "THICKOUTLINE", "overlay status text uses the same strong outline")
-check(HTF.Stats.overlay.rows.strength.textColor[1] ~= HTF.Stats.overlay.rows.agility.textColor[1], "default stat rows use distinct colors")
-check(HTF.Stats.overlay.rows.durability ~= nil, "overlay creates a durability row")
-check(not HTF.Stats.overlay.rows.durability:IsShown(), "adventure status rows default hidden")
-
 for _, frame in ipairs(frames) do
 	check(frame.scripts.OnUpdate == nil, "addon frames do not use OnUpdate polling")
 end
 
 fireEvent("PLAYER_ENTERING_WORLD")
 flushTimers()
-equal(HTF.Stats.overlay.rows.criticalStrike:GetText(), HTF.Stats:GetStatLabel("criticalStrike") .. ": 15.25%", "HUD crit matches PaperDoll max melee/ranged/spell behavior")
-local sawFirstSpellSchool = false
-local sawLastSpellSchool = false
-for _, school in ipairs(spellSchoolsRead) do
-	check(school ~= 1, "PaperDoll crit calculation skips the physical school")
-	sawFirstSpellSchool = sawFirstSpellSchool or school == 2
-	sawLastSpellSchool = sawLastSpellSchool or school == MAX_SPELL_SCHOOLS
-end
-check(sawFirstSpellSchool and sawLastSpellSchool, "PaperDoll crit calculation reads spell schools 2 through MAX_SPELL_SCHOOLS")
 
 fireEvent("PLAYER_LOGIN")
 check(HTF.Options.panel ~= nil, "options panel is created at login")
@@ -1219,6 +1181,8 @@ equal(HTF.Options:GetCategoryID(), 120101, "registered category exposes its nume
 check(UISpecialFrames[1] == "HappyTreeFriendsSettingsFrame", "Escape closes the dedicated settings frame")
 check(HTF.Options.pages.nameplates ~= nil, "friendly names page is created")
 check(HTF.Options.navigation.nameplates ~= nil, "friendly names page has a navigation button")
+equal(HTF.Options.pages.stats, nil, "removed stats page is not created")
+equal(HTF.Options.navigation.stats, nil, "removed stats navigation is not created")
 check(HTF.Options.pages.raidDebuffs ~= nil, "raid debuff page is created")
 check(HTF.Options.navigation.raidDebuffs ~= nil, "raid debuff page has a navigation button")
 check(HTF.Options.debugScrollFrame.ScrollBar ~= nil, "12.1 scroll template exposes its scrollbar through parentKey")
@@ -1232,6 +1196,9 @@ equal(localizedToggle.state.points[1][1], "LEFT", "enabled toggle text stays opp
 localizedToggle:Render(false)
 check(HTF.Options.debugReportButton.width >= 116, "diagnostic button accommodates its English label")
 
+HTF:HandleSlashCommand("stats")
+check(HTF.Options:IsPageVisible("overview"), "removed /htf stats command falls back to the overview")
+
 local customerCopy = {}
 for _, frame in ipairs(frames) do
 	if frame.kind == "FontString" then
@@ -1241,7 +1208,6 @@ end
 local allCustomerCopy = table.concat(customerCopy, "\n")
 contains(allCustomerCopy, HTF.L.OVERVIEW_INTRO, "overview uses the selected locale")
 contains(allCustomerCopy, HTF.L.MERCHANT_PAGE_HELP, "merchant page uses the selected locale")
-contains(allCustomerCopy, HTF.L.STATS_PAGE_HELP, "stats page uses the selected locale")
 contains(allCustomerCopy, HTF.L.NAMEPLATES_PAGE_HELP, "friendly names page uses the selected locale")
 contains(allCustomerCopy, HTF.L.FRIENDLY_NAMES_ONLY_NOTICE, "friendly names page explains snapshot restoration")
 contains(allCustomerCopy, HTF.L.RAID_DEBUFFS_PAGE_HELP, "raid debuff page uses the selected locale")
@@ -1477,8 +1443,8 @@ HTF.FriendlyNames:Synchronize()
 equal(HTF.db.friendlyNamesOnlySnapshot, nil, "invalid persisted friendly settings snapshots are discarded safely")
 
 local settingsOpenCallsBeforeSlash = settingsOpenCalls
-HTF.Options:Open("stats")
-check(HTF.Options:IsPageVisible("stats"), "stats page becomes visible")
+HTF.Options:Open("merchant")
+check(HTF.Options:IsPageVisible("merchant"), "merchant page becomes visible")
 equal(settingsOpenCalls, settingsOpenCallsBeforeSlash, "slash command opens the dedicated settings frame directly")
 equal(HTF.Options.panel.points[1][1], "CENTER", "dedicated settings frame is centered when opened")
 HTF.Options.panel.scripts.OnDragStart(HTF.Options.panel)
@@ -1489,331 +1455,13 @@ HTF.Options.panel.scripts.OnDragStop(HTF.Options.panel)
 check(HTF.Options.panel.stoppedMoving, "dedicated settings frame stops moving when drag ends")
 HTF.Options.closeButton.scripts.OnClick(HTF.Options.closeButton)
 check(not HTF.Options.panel:IsShown(), "settings close button hides the dedicated frame")
-HTF.Options:Open("stats")
+HTF.Options:Open("merchant")
 check(HTF.Options.panel:IsShown(), "opening settings restores the dedicated frame")
 equal(HTF.Options.panel.points[1][1], "TOPLEFT", "reopening settings keeps the moved window position")
-equal(HTF.Stats.view, nil, "settings page no longer owns a live stat-value view")
-local configuredStatRows = 0
-for _ in pairs(HTF.Options.statSettingRows) do
-	configuredStatRows = configuredStatRows + 1
-end
-equal(configuredStatRows, 18, "settings page exposes all stat and adventure-status controls")
-equal(HTF.Options.statsFontValue:GetText(), "15", "settings page displays the active font size")
-
-local leftToggle = HTF.Options.statsDisplayToggleRow
-local rightToggle = HTF.Options.statsLockToggleRow
-equal(leftToggle.width, nil, "left stats toggle does not use a fixed width")
-equal(rightToggle.width, nil, "right stats toggle does not use a fixed width")
-equal(#leftToggle.points, 2, "left stats toggle stretches between two responsive anchors")
-equal(leftToggle.points[1][3], "TOPLEFT", "left stats toggle starts at the content edge")
-equal(leftToggle.points[2][3], "TOP", "left stats toggle ends at the content midpoint")
-equal(rightToggle.points[1][3], "TOP", "right stats toggle starts at the content midpoint")
-equal(rightToggle.points[2][3], "TOPRIGHT", "right stats toggle ends at the content edge")
 
 local friendlyFontToggle = HTF.Options.friendlyNameFontToggleRow
 equal(friendlyFontToggle.width, nil, "friendly font-size toggle does not use a fixed width")
 equal(#friendlyFontToggle.points, 2, "friendly font-size toggle uses responsive anchors")
-
-local leftStatRow = HTF.Options.statSettingRows.strength
-local rightStatRow = HTF.Options.statSettingRows.mastery
-equal(leftStatRow.width, nil, "left stat control does not use a fixed width")
-equal(rightStatRow.width, nil, "right stat control does not use a fixed width")
-equal(leftStatRow.points[2][3], "TOP", "left stat control is constrained to the content midpoint")
-equal(rightStatRow.points[1][3], "TOP", "right stat control begins at the content midpoint")
-equal(rightStatRow.points[2][3], "TOPRIGHT", "right stat control remains inside the content edge")
-
-HTF.Options.panel:Hide()
-local readsBeforeHiddenPanelEvent = statReads
-HTF.Stats:OnEvent("COMBAT_RATING_UPDATE")
-flushTimers()
-check(statReads > readsBeforeHiddenPanelEvent, "HUD refreshes even while the settings panel is hidden")
-
-secretCrit = true
-local critOk, critError = pcall(function()
-	HTF.Stats:Refresh()
-end)
-check(critOk, "secret crit values must not be compared or formatted in the HUD: " .. tostring(critError))
-equal(HTF.Stats.overlay.rows.criticalStrike:GetText(), HTF.Stats:GetStatLabel("criticalStrike") .. ": " .. HTF.L.STAT_RESTRICTED, "secret crit is marked restricted in the HUD")
-equal(HTF.Stats.overlay.status:GetText(), HTF.L.STATS_PARTIALLY_RESTRICTED, "restricted stats produce a safe HUD status")
-secretCrit = false
-
-secretHaste = true
-local hasteOk, hasteError = pcall(function()
-	HTF.Stats:Refresh()
-end)
-check(hasteOk, "secret percentage values must not enter boolean or formatting operations: " .. tostring(hasteError))
-equal(HTF.Stats.overlay.rows.haste:GetText(), HTF.Stats:GetStatLabel("haste") .. ": " .. HTF.L.STAT_RESTRICTED, "secret haste is marked restricted in the HUD")
-secretHaste = false
-HTF.Stats:Refresh()
-
-secretPrimaryStat = true
-secretArmor = true
-secretOtherStats = true
-local broadSecretStatsOk, broadSecretStatsError = pcall(function()
-	HTF.Stats:Refresh()
-end)
-check(broadSecretStatsOk, "secret primary/armor/secondary stats must not be formatted or combined: " .. tostring(broadSecretStatsError))
-equal(HTF.Stats.overlay.rows.strength:GetText(), HTF.Stats:GetStatLabel("strength") .. ": " .. HTF.L.STAT_RESTRICTED, "secret primary stat is marked restricted")
-equal(HTF.Stats.overlay.rows.armor:GetText(), HTF.Stats:GetStatLabel("armor") .. ": " .. HTF.L.STAT_RESTRICTED, "secret armor is marked restricted")
-for _, key in ipairs({ "mastery", "versatility", "lifesteal", "avoidance", "speed", "dodge", "parry" }) do
-	contains(HTF.Stats.overlay.rows[key]:GetText(), HTF.L.STAT_RESTRICTED, "secret secondary stat is marked restricted: " .. key)
-end
-secretPrimaryStat = false
-secretArmor = false
-secretOtherStats = false
-HTF.Stats:Refresh()
-
-HTF:SetSetting("showStats", false)
-check(not HTF.Stats.overlay:IsShown(), "disabling stats hides the HUD")
-local readsBeforeHiddenOverlayEvent = statReads
-HTF.Stats:OnEvent("COMBAT_RATING_UPDATE")
-flushTimers()
-equal(statReads, readsBeforeHiddenOverlayEvent, "hidden HUD does not read stat APIs")
-HTF:SetSetting("showStats", true)
-flushTimers()
-check(HTF.Stats.overlay:IsShown(), "re-enabling stats shows the HUD")
-
-local fullOverlayHeight = HTF.Stats.overlay.height
-local strengthReadsBeforeHide = unitStatReads[1]
-local agilityReadsBeforeHide = unitStatReads[2]
-HTF.Stats:SetStatVisible("strength", false)
-check(not HTF.Stats.overlay.rows.strength:IsShown(), "per-stat visibility hides the selected HUD row")
-equal(HTF.Stats:GetVisibleStatCount(), 13, "visible stat count updates after hiding a row")
-check(HTF.Stats.overlay.height < fullOverlayHeight, "HUD height shrinks when a stat row is hidden")
-flushTimers()
-equal(unitStatReads[1], strengthReadsBeforeHide, "hidden stat API is not read")
-check(unitStatReads[2] > agilityReadsBeforeHide, "visible stat APIs continue to refresh")
-HTF.Stats:SetStatVisible("strength", true)
-flushTimers()
-check(HTF.Stats.overlay.rows.strength:IsShown(), "per-stat visibility can restore a HUD row")
-equal(HTF.Stats:GetVisibleStatCount(), 14, "visible stat count restores after showing a row")
-
-check(HTF.Options.statSettingRows.durability ~= nil, "settings expose a durability toggle")
-check(HTF.Options.statSettingRows.bagSpace ~= nil, "settings expose a bag-space toggle")
-check(HTF.Options.statSettingRows.money ~= nil, "settings expose a money toggle")
-check(HTF.Options.statSettingRows.latency ~= nil, "settings expose a latency toggle")
-check(HTF.Stats.eventFrame.events.UPDATE_INVENTORY_DURABILITY, "HUD listens for durability changes")
-check(HTF.Stats.eventFrame.events.BAG_UPDATE_DELAYED, "HUD listens for settled bag changes")
-check(HTF.Stats.eventFrame.events.PLAYER_MONEY, "HUD listens for money changes")
-check(HTF.Stats.eventFrame.events.ZONE_CHANGED_NEW_AREA, "HUD refreshes latency after area changes")
-
-for _, key in ipairs({ "durability", "bagSpace", "money", "latency" }) do
-	HTF.Stats:SetStatVisible(key, true)
-end
-flushTimers()
-equal(HTF.Stats:GetVisibleAdventureStatusCount(), 4, "all selected adventure rows become visible")
-equal(HTF.Stats.overlay.rows.durability:GetText(), HTF.Stats:GetStatLabel("durability") .. ": 35%", "HUD shows average equipment durability")
-equal(HTF.Stats.overlay.rows.bagSpace:GetText(), HTF.Stats:GetStatLabel("bagSpace") .. ": 2/80", "HUD shows free and total bag slots")
-contains(HTF.Stats.overlay.rows.money:GetText(), HTF.Stats:GetStatLabel("money") .. ": ", "HUD shows current money")
-equal(HTF.Stats.overlay.rows.latency:GetText(), HTF.Stats:GetStatLabel("latency") .. ": 42 ms", "HUD shows world latency")
-equal(HTF.Stats.overlay.rows.durability.textColor[1], 0.96, "low durability uses the warning color")
-equal(HTF.Stats.overlay.rows.bagSpace.textColor[1], 1.00, "nearly full bags use the critical color")
-
-inventoryDurability[1].current = 10
-fireEvent("UPDATE_INVENTORY_DURABILITY")
-flushTimers()
-equal(HTF.Stats.overlay.rows.durability:GetText(), HTF.Stats:GetStatLabel("durability") .. ": 10%", "durability refreshes from its event")
-equal(HTF.Stats.overlay.rows.durability.textColor[1], 1.00, "critical durability uses the critical color")
-
-bagFreeSlots[0] = 5
-fireEvent("BAG_UPDATE_DELAYED")
-flushTimers()
-equal(HTF.Stats.overlay.rows.bagSpace:GetText(), HTF.Stats:GetStatLabel("bagSpace") .. ": 5/80", "bag space refreshes from its event")
-equal(HTF.Stats.overlay.rows.bagSpace.textColor[1], 0.96, "low bag space uses the warning color")
-
-worldLatency = 77
-fireEvent("ZONE_CHANGED_NEW_AREA")
-flushTimers()
-equal(HTF.Stats.overlay.rows.latency:GetText(), HTF.Stats:GetStatLabel("latency") .. ": 77 ms", "latency refreshes from an area-change event")
-
-secretDurability = true
-local secretDurabilityOk, secretDurabilityError = pcall(function()
-	HTF.Stats:Refresh()
-end)
-check(secretDurabilityOk, "secret durability values must not be combined or formatted: " .. tostring(secretDurabilityError))
-contains(HTF.Stats.overlay.rows.durability:GetText(), HTF.L.STAT_RESTRICTED, "secret durability is marked restricted")
-secretDurability = false
-
-secretBagSpace = true
-local secretBagSpaceOk, secretBagSpaceError = pcall(function()
-	HTF.Stats:Refresh()
-end)
-check(secretBagSpaceOk, "secret bag-space values must not be combined or formatted: " .. tostring(secretBagSpaceError))
-contains(HTF.Stats.overlay.rows.bagSpace:GetText(), HTF.L.STAT_RESTRICTED, "secret bag space is marked restricted")
-secretBagSpace = false
-
-secretLatency = true
-local secretLatencyOk, secretLatencyError = pcall(function()
-	HTF.Stats:Refresh()
-end)
-check(secretLatencyOk, "secret latency values must not be formatted: " .. tostring(secretLatencyError))
-contains(HTF.Stats.overlay.rows.latency:GetText(), HTF.L.STAT_RESTRICTED, "secret latency is marked restricted")
-secretLatency = false
-
-inventoryDurability[1] = nil
-HTF.Stats:Refresh()
-equal(HTF.Stats.overlay.rows.durability:GetText(), HTF.Stats:GetStatLabel("durability") .. ": " .. HTF.L.STAT_UNAVAILABLE, "missing durability data is unavailable rather than restricted")
-inventoryDurability[1] = { current = 35, maximum = 100 }
-
-local getContainerNumFreeSlots = C_Container.GetContainerNumFreeSlots
-C_Container.GetContainerNumFreeSlots = nil
-HTF.Stats:Refresh()
-equal(HTF.Stats.overlay.rows.bagSpace:GetText(), HTF.Stats:GetStatLabel("bagSpace") .. ": " .. HTF.L.STAT_UNAVAILABLE, "missing bag API is unavailable rather than restricted")
-C_Container.GetContainerNumFreeSlots = getContainerNumFreeSlots
-
-local getNetStats = GetNetStats
-GetNetStats = nil
-HTF.Stats:Refresh()
-equal(HTF.Stats.overlay.rows.latency:GetText(), HTF.Stats:GetStatLabel("latency") .. ": " .. HTF.L.STAT_UNAVAILABLE, "missing latency API is unavailable rather than restricted")
-GetNetStats = getNetStats
-
-local getMoney = GetMoney
-GetMoney = nil
-HTF.Stats:Refresh()
-equal(HTF.Stats.overlay.rows.money:GetText(), HTF.Stats:GetStatLabel("money") .. ": " .. HTF.L.STAT_UNAVAILABLE, "missing money API is unavailable rather than restricted")
-GetMoney = getMoney
-
-inventoryDurability[1].current = 35
-bagFreeSlots[0] = 2
-worldLatency = 42
-for _, key in ipairs({ "durability", "bagSpace", "money", "latency" }) do
-	HTF.Stats:SetStatVisible(key, false)
-end
-flushTimers()
-equal(HTF.Stats:GetVisibleAdventureStatusCount(), 0, "adventure rows can be hidden again")
-
-HTF.Stats:SetFontSize(19)
-equal(HTF:GetSetting("statsFontSize"), 19, "font size persists in settings")
-equal(HTF.Stats.overlay.rows.haste.fontSize, 19, "font size applies to HUD rows")
-equal(HTF.Options.statsFontValue:GetText(), "19", "font size control refreshes immediately")
-HTF.Stats:SetFontSize(100)
-equal(HTF:GetSetting("statsFontSize"), HTF.Stats.MAX_FONT_SIZE, "font size is clamped to its safe maximum")
-HTF.Stats:SetFontSize(14)
-
-local originalR, originalG, originalB = HTF.Stats:GetStatColor("haste")
-HTF.Options:OpenStatColorPicker("haste")
-check(ColorPickerFrame.shown, "current 12.1 color picker opens")
-equal(ColorPickerFrame.info.hasOpacity, false, "stat colors do not expose opacity")
-local overlayPointsBeforeColorDrag = HTF.Stats.overlay.points
-ColorPickerFrame.r, ColorPickerFrame.g, ColorPickerFrame.b = 0.12, 0.34, 0.56
-ColorPickerFrame.info.swatchFunc()
-local changedR, changedG, changedB = HTF.Stats:GetStatColor("haste")
-equal(changedR, 0.12, "color picker persists red component")
-equal(changedG, 0.34, "color picker persists green component")
-equal(changedB, 0.56, "color picker persists blue component")
-equal(HTF.Stats.overlay.rows.haste.textColor[3], 0.56, "color picker updates the HUD immediately")
-check(HTF.Stats.overlay.points == overlayPointsBeforeColorDrag, "color dragging does not re-anchor or relayout the HUD")
-ColorPickerFrame.info.cancelFunc({ r = originalR, g = originalG, b = originalB })
-local restoredR, restoredG, restoredB = HTF.Stats:GetStatColor("haste")
-equal(restoredR, originalR, "canceling color picker restores red")
-equal(restoredG, originalG, "canceling color picker restores green")
-equal(restoredB, originalB, "canceling color picker restores blue")
-
-HTF.Stats.overlay.moving = false
-HTF.Stats.overlay.scripts.OnDragStart(HTF.Stats.overlay)
-equal(HTF.Stats.overlay.moving, false, "locked HUD cannot start moving")
-HTF:SetSetting("statsLocked", false)
-equal(HTF.Stats.overlay.mouseEnabled, true, "unlocked HUD accepts mouse input")
-equal(HTF.Stats.overlay.backdropColor[4], 0.82, "unlocked HUD shows its drag background")
-check(HTF.Stats.overlay.title:IsShown(), "unlocked HUD shows its drag hint")
-check(HTF.Stats.overlay.resizeHandle:IsShown(), "unlocked HUD shows its resize handle")
-local resizeBaseWidth = HTF.Stats.overlayBaseWidth
-local resizeBaseHeight = HTF.Stats.overlayBaseHeight
-HTF.Stats.overlay.resizeHandle.scripts.OnDragStart(HTF.Stats.overlay.resizeHandle)
-equal(HTF.Stats.overlay.sizing, "BOTTOMRIGHT", "resize handle starts native bottom-right sizing")
-check(HTF.Stats.overlay.resizeBounds ~= nil, "resize handle applies bounds for the allowed scale range")
-HTF.Stats.overlay:SetSize(resizeBaseWidth * 1.5, resizeBaseHeight * 1.5)
-HTF.Stats.overlay.resizeHandle.scripts.OnDragStop(HTF.Stats.overlay.resizeHandle)
-equal(HTF:GetSetting("statsScale"), 1.5, "resizing persists proportional HUD scale")
-equal(HTF.Stats.overlay:GetScale(), 1.5, "resizing applies HUD scale immediately")
-equal(HTF.Stats.overlay.width, resizeBaseWidth, "resizing restores the HUD's calculated base width")
-equal(HTF.Stats.overlay.height, resizeBaseHeight, "resizing restores the HUD's calculated base height")
-HTF.Stats:SetScale(99)
-equal(HTF.Stats:GetScale(), HTF.Stats.MAX_SCALE, "HUD scale clamps to its maximum")
-HTF.Stats:SetScale(-1)
-equal(HTF.Stats:GetScale(), HTF.Stats.MIN_SCALE, "HUD scale clamps to its minimum")
-HTF.Stats:SetScale(1)
-HTF.Stats.overlay.scripts.OnDragStart(HTF.Stats.overlay)
-check(HTF.Stats.overlay.moving, "unlocked HUD starts moving")
-HTF.Stats.overlay:ClearAllPoints()
-HTF.Stats.overlay:SetPoint("CENTER", UIParent, "CENTER", 123, -45)
-HTF.Stats.overlay.scripts.OnDragStop(HTF.Stats.overlay)
-equal(HTF.db.statsPosition.point, "CENTER", "dragging persists HUD anchor point")
-equal(HTF.db.statsPosition.x, 123, "dragging persists HUD x offset")
-equal(HTF.db.statsPosition.y, -45, "dragging persists HUD y offset")
-HTF.Stats:ApplyOverlaySettings()
-equal(HTF.Stats.overlay.points[1][1], "CENTER", "persisted HUD position restores")
-HTF.Stats.overlay:ClearAllPoints()
-HTF.Stats.overlay:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 88, -99)
-HTF.Stats.overlay:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -120, 140)
-HTF.Stats:SavePosition()
-equal(HTF.db.statsPosition.point, "TOPLEFT", "multi-anchor drag state persists its first canonical anchor")
-equal(HTF.db.statsPosition.relativePoint, "TOPLEFT", "multi-anchor drag state persists the matching relative anchor")
-equal(HTF.db.statsPosition.x, 88, "multi-anchor drag state persists its x offset")
-HTF.Stats:ApplyOverlaySettings()
-equal(#HTF.Stats.overlay.points, 1, "restoring a dragged HUD normalizes it to one stable anchor")
-HTF.Stats:ResetPosition()
-equal(HTF.db.statsPosition.point, HTF.defaults.statsPosition.point, "reset position restores default anchor")
-HTF:SetSetting("statsLocked", true)
-equal(HTF.Stats.overlay.mouseEnabled, false, "re-locking HUD releases mouse input")
-equal(HTF.Stats.overlay.backdropColor[4], 0, "re-locking HUD restores transparency")
-check(not HTF.Stats.overlay.resizeHandle:IsShown(), "re-locking HUD hides its resize handle")
-
-combatLocked = true
-local readsBeforeCombat = statReads
-fireEvent("PLAYER_REGEN_DISABLED")
-flushTimers()
-check(statReads > readsBeforeCombat, "entering combat refreshes the HUD instead of blocking stat reads")
-equal(HTF.Stats.overlay.status:GetText(), "", "combat does not show a blanket restriction notice")
-
-local readsBeforeForeignAura = statReads
-fireEvent("UNIT_AURA", "target")
-flushTimers()
-equal(statReads, readsBeforeForeignAura, "non-player aura events do not refresh the HUD")
-
-secretHaste = true
-fireEvent("UNIT_SPELL_HASTE", "player")
-flushTimers()
-equal(HTF.Stats.overlay.rows.haste:GetText(), HTF.Stats:GetStatLabel("haste") .. ": " .. HTF.L.STAT_RESTRICTED, "genuinely secret combat stats remain restricted per value")
-check(not HTF.Stats.overlay.rows.strength:GetText():find(HTF.L.STAT_RESTRICTED, 1, true), "readable combat stats continue to display")
-equal(HTF.Stats.overlay.status:GetText(), HTF.L.STATS_PARTIALLY_RESTRICTED, "combat reports only actual restricted values")
-
-secretHaste = false
-fireEvent("UNIT_AURA", "player")
-flushTimers()
-equal(HTF.Stats.overlay.rows.haste:GetText(), HTF.Stats:GetStatLabel("haste") .. ": 12.50%", "player aura changes refresh readable combat stats")
-equal(HTF.Stats.overlay.status:GetText(), "", "combat restriction notice clears when values are readable")
-
-combatLocked = false
-fireEvent("PLAYER_REGEN_ENABLED")
-flushTimers()
-equal(HTF.Stats.overlay.status:GetText(), "", "leaving combat performs a final HUD refresh")
-
-HTF.db.statsLocked = "corrupt"
-HTF.db.statsFontSize = "large"
-HTF.db.statsScale = 9
-HTF.db.statsVisibility = "corrupt"
-HTF.db.statsColors = { strength = { 2, -1, "blue" } }
-HTF.db.statsPosition = { point = "BOGUS", relativePoint = "NOPE", x = 9000, y = "down" }
-HTF.Stats:NormalizeSettings()
-equal(HTF.db.statsLocked, HTF.defaults.statsLocked, "invalid persisted lock state resets to default")
-equal(HTF.db.statsFontSize, HTF.defaults.statsFontSize, "invalid persisted font size resets to default")
-equal(HTF.db.statsScale, HTF.Stats.MAX_SCALE, "persisted HUD scale is clamped")
-equal(HTF.Stats:GetVisibleStatCount(), 14, "invalid persisted visibility table is rebuilt")
-local normalizedR, normalizedG, normalizedB = HTF.Stats:GetStatColor("strength")
-equal(normalizedR, 1, "persisted color red component is clamped")
-equal(normalizedG, 0, "persisted color green component is clamped")
-equal(normalizedB, HTF.defaults.statsColors.strength[3], "invalid persisted color component resets to default")
-equal(HTF.db.statsPosition.point, HTF.defaults.statsPosition.point, "invalid persisted anchor resets to default")
-equal(HTF.db.statsPosition.relativePoint, HTF.defaults.statsPosition.relativePoint, "invalid persisted relative anchor resets to default")
-equal(HTF.db.statsPosition.x, 4096, "persisted x offset is clamped")
-equal(HTF.db.statsPosition.y, HTF.defaults.statsPosition.y, "invalid persisted y offset resets to default")
-HTF.Stats:ResetColors()
-HTF.Stats:ResetPosition()
-HTF.db.statsScale = "large"
-HTF.Stats:NormalizeSettings()
-equal(HTF.db.statsScale, HTF.defaults.statsScale, "invalid persisted HUD scale resets to default")
-HTF.Stats:ApplyOverlaySettings()
 
 HTF:SetSetting("autoRepair", true)
 HTF:SetSetting("autoSellJunk", true)
@@ -2036,14 +1684,11 @@ contains(report, "raidDebuffsIconSize: 12", "diagnostic report includes the raid
 contains(report, "raidDebuffsOffset: -2, 2", "diagnostic report includes raid debuff offsets")
 contains(report, "raidDebuffsAvailable: true", "diagnostic report includes secure aura availability")
 contains(report, "raidDebuffsPending: false", "diagnostic report includes deferred raid debuff state")
-contains(report, "statsFontSize: 15", "diagnostic report includes HUD font size")
-contains(report, "statsScale: 1", "diagnostic report includes HUD scale")
-contains(report, "visibleStats: 14/14", "diagnostic report includes visible HUD stat count")
-contains(report, "visibleAdventureStatus: 0/4", "diagnostic report includes visible adventure-status count")
+check(not report:find("showStats", 1, true), "diagnostic report omits removed stats settings")
+check(not report:find("statsFontSize", 1, true), "diagnostic report omits removed HUD configuration")
 contains(report, "Protected junk item IDs: 0", "diagnostic report excludes protected item details while reporting their count")
 contains(report, "sessionRepairs:", "diagnostic report includes session repair total")
 contains(report, "sessionJunkIncome:", "diagnostic report includes session junk income")
-contains(report, "statsPosition:", "diagnostic report includes HUD position")
 contains(report, "Persisted debug log (80/80)", "diagnostic report log count")
 contains(report, "no account, character, or realm identifiers", "diagnostic report privacy note")
 

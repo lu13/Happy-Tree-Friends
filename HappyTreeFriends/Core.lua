@@ -1,7 +1,7 @@
 local ADDON_NAME, HTF = ...
 
 HTF.ADDON_NAME = ADDON_NAME
-HTF.VERSION = "0.7.3"
+HTF.VERSION = "0.8.0"
 HTF.MAX_DEBUG_LOG_ENTRIES = 80
 HTF.debugLog = {}
 
@@ -22,59 +22,19 @@ HTF.defaults = {
 	raidDebuffsAnchor = "BOTTOMRIGHT",
 	raidDebuffsOffsetX = -2,
 	raidDebuffsOffsetY = 2,
-	showStats = true,
-	statsLocked = true,
-	statsFontSize = 15,
-	statsScale = 1,
-	statsPosition = {
-		point = "TOPRIGHT",
-		relativePoint = "TOPRIGHT",
-		x = -70,
-		y = -260,
-	},
-	statsVisibility = {
-		strength = true,
-		agility = true,
-		stamina = true,
-		intellect = true,
-		armor = true,
-		criticalStrike = true,
-		haste = true,
-		mastery = true,
-		versatility = true,
-		lifesteal = true,
-		avoidance = true,
-		speed = true,
-		dodge = true,
-		parry = true,
-		durability = false,
-		bagSpace = false,
-		money = false,
-		latency = false,
-	},
-	statsColors = {
-		strength = { 0.96, 0.45, 0.42 },
-		agility = { 0.42, 0.91, 0.62 },
-		stamina = { 0.95, 0.68, 0.33 },
-		intellect = { 0.44, 0.69, 1.00 },
-		armor = { 0.74, 0.78, 0.86 },
-		criticalStrike = { 1.00, 0.43, 0.50 },
-		haste = { 0.96, 0.82, 0.34 },
-		mastery = { 0.73, 0.55, 1.00 },
-		versatility = { 0.31, 0.87, 0.81 },
-		lifesteal = { 0.94, 0.48, 0.78 },
-		avoidance = { 0.36, 0.76, 0.96 },
-		speed = { 0.48, 0.93, 0.68 },
-		dodge = { 0.69, 0.88, 0.34 },
-		parry = { 1.00, 0.61, 0.31 },
-		durability = { 0.95, 0.74, 0.35 },
-		bagSpace = { 0.39, 0.83, 0.98 },
-		money = { 1.00, 0.84, 0.30 },
-		latency = { 0.64, 0.76, 1.00 },
-	},
 	showNotifications = true,
 	debug = false,
 	debugLog = {},
+}
+
+local REMOVED_STATS_SETTING_KEYS = {
+	"showStats",
+	"statsLocked",
+	"statsFontSize",
+	"statsScale",
+	"statsPosition",
+	"statsVisibility",
+	"statsColors",
 }
 
 local function mergeDefaults(target, defaults)
@@ -114,6 +74,9 @@ function HTF:InitializeDatabase()
 	end
 
 	mergeDefaults(HappyTreeFriendsDB, self.defaults)
+	for _, key in ipairs(REMOVED_STATS_SETTING_KEYS) do
+		HappyTreeFriendsDB[key] = nil
+	end
 	self.db = HappyTreeFriendsDB
 	self.db.debugLog = normalizeDebugLog(self.db.debugLog, self.MAX_DEBUG_LOG_ENTRIES)
 	self.debugLog = self.db.debugLog
@@ -135,9 +98,6 @@ function HTF:SetSetting(key, value)
 		or key == "friendlyNameFontSize"
 	) then
 		self.FriendlyNames:OnSettingChanged()
-	end
-	if self.Stats and self.Stats.OnSettingChanged then
-		self.Stats:OnSettingChanged(key)
 	end
 	if self.RaidDebuffs and self.RaidDebuffs.OnSettingChanged then
 		self.RaidDebuffs:OnSettingChanged(key)
@@ -263,7 +223,7 @@ function HTF:BuildDiagnosticReport()
 		"Settings:",
 	}
 
-	for _, key in ipairs({ "autoRepair", "repairFromGuild", "autoSellJunk", "friendlyNamesOnly", "friendlyNameCustomFontSize", "raidDebuffsEnabled", "raidDebuffsShowBleed", "raidDebuffsShowCrowdControl", "raidDebuffsShowRaidInCombat", "raidDebuffsShowShortOther", "showStats", "statsLocked", "showNotifications", "debug" }) do
+	for _, key in ipairs({ "autoRepair", "repairFromGuild", "autoSellJunk", "friendlyNamesOnly", "friendlyNameCustomFontSize", "raidDebuffsEnabled", "raidDebuffsShowBleed", "raidDebuffsShowCrowdControl", "raidDebuffsShowRaidInCombat", "raidDebuffsShowShortOther", "showNotifications", "debug" }) do
 		table.insert(lines, string.format("- %s: %s", key, tostring(self:GetSetting(key) == true)))
 	end
 	table.insert(lines, string.format("- friendlyNameFontSize: %s", self:SafeScalarText(self:GetSetting("friendlyNameFontSize"))))
@@ -274,13 +234,6 @@ function HTF:BuildDiagnosticReport()
 		table.insert(lines, string.format("- raidDebuffsAvailable: %s", tostring(self.RaidDebuffs:IsAvailable())))
 		table.insert(lines, string.format("- raidDebuffsTrackedFrames: %d", self.RaidDebuffs:GetTrackedFrameCount()))
 		table.insert(lines, string.format("- raidDebuffsPending: %s", tostring(self.RaidDebuffs.pendingApply == true)))
-	end
-	table.insert(lines, string.format("- statsFontSize: %s", self:SafeScalarText(self:GetSetting("statsFontSize"))))
-	table.insert(lines, string.format("- statsScale: %s", self:SafeScalarText(self:GetSetting("statsScale"))))
-	if self.Stats then
-		table.insert(lines, string.format("- visibleStats: %d/%d", self.Stats:GetVisibleStatCount(), #self.Stats.STAT_DEFINITIONS))
-		table.insert(lines, string.format("- visibleAdventureStatus: %d/%d", self.Stats:GetVisibleAdventureStatusCount(), #self.Stats.ADVENTURE_DEFINITIONS))
-		table.insert(lines, "- statsPosition: " .. self.Stats:GetPositionSummary())
 	end
 	if ledger then
 		table.insert(lines, string.format("- sessionRepairs: %s", self:FormatMoney(ledger.repairTotal)))
@@ -356,11 +309,6 @@ function HTF:HandleSlashCommand(input)
 		if enabled then
 			self:Debug(self.L.DEBUG_MODE_ENABLED)
 		end
-		return
-	end
-
-	if command == "stats" or command == self.L.COMMAND_STATS_ALIAS then
-		self:OpenOptions("stats")
 		return
 	end
 
@@ -457,9 +405,6 @@ function HTF:Initialize()
 	end
 	if self.FriendlyNames then
 		self.FriendlyNames:Initialize()
-	end
-	if self.Stats then
-		self.Stats:Initialize()
 	end
 	if self.RaidDebuffs then
 		self.RaidDebuffs:Initialize()

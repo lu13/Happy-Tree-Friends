@@ -1,9 +1,9 @@
 ## Interface: 120100
 ## Title: Happy Tree Friends
-## Notes: An event-driven WoW Retail toolkit with raid debuff enhancements, safe merchant automation, friendly names, and a customizable adventure HUD.
-## Notes-zhCN: 事件驱动的正式服日常工具：团队减益增强、安全修理/售灰装、友方仅姓名和可定制冒险状态悬浮层。
+## Notes: An event-driven WoW Retail toolkit with raid debuff enhancements, safe merchant automation, and friendly-name controls.
+## Notes-zhCN: 事件驱动的正式服日常工具：团队减益增强、安全修理/售灰装和友方姓名控制。
 ## Author: Happy Tree Friends
-## Version: 0.7.3
+## Version: 0.8.0
 ## Dependencies: Blizzard_AuraContainer, Blizzard_UnitFrame
 ## SavedVariables: HappyTreeFriendsDB
 
@@ -12,5 +12,4 @@ Core.lua
 RaidDebuffs.lua
 FriendlyNames.lua
 Merchant.lua
-Stats.lua
 Options.lua
