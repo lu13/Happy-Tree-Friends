@@ -3,6 +3,12 @@ local _, HTF = ...
 local RaidDebuffs = {}
 HTF.RaidDebuffs = RaidDebuffs
 
+RaidDebuffs.settingPrefix = "raidDebuffs"
+RaidDebuffs.defaultAnchor = "BOTTOMRIGHT"
+RaidDebuffs.defaultOffsetX = -2
+RaidDebuffs.defaultOffsetY = 2
+RaidDebuffs.noticePrefix = "RAID_DEBUFFS"
+RaidDebuffs.highlightColor = { 1, 0.35, 0.15 }
 RaidDebuffs.DEFAULT_ICON_SIZE = 12
 RaidDebuffs.MIN_ICON_SIZE = 8
 RaidDebuffs.MAX_ICON_SIZE = 24
@@ -67,6 +73,8 @@ RaidDebuffs.SETTING_KEYS = {
 	raidDebuffsShowRaidInCombat = true,
 	raidDebuffsShowShortOther = true,
 	raidDebuffsIconSize = true,
+	raidDebuffsHighlight = true,
+	raidDebuffsCountdown = true,
 	raidDebuffsAnchor = true,
 	raidDebuffsOffsetX = true,
 	raidDebuffsOffsetY = true,
@@ -110,15 +118,15 @@ local function clampOffset(value, fallback)
 	return math.max(-RaidDebuffs.MAX_OFFSET, math.min(RaidDebuffs.MAX_OFFSET, math.floor(value + 0.5)))
 end
 
-local function clampIconSize(value)
+local function clampIconSize(value, defaultSize)
 	if not HTF:IsSafeNumber(value) then
-		return RaidDebuffs.DEFAULT_ICON_SIZE
+		return defaultSize
 	end
 	return math.max(RaidDebuffs.MIN_ICON_SIZE, math.min(RaidDebuffs.MAX_ICON_SIZE, math.floor(value + 0.5)))
 end
 
 function RaidDebuffs:InitializeAuraButton(button)
-	local iconSize = self:GetIconSize()
+	local iconSize = self.appliedAppearance and self.appliedAppearance.size or self:GetIconSize()
 	button:SetSize(iconSize, iconSize)
 	button:SetMouseClickEnabled(false)
 	button:SetMouseMotionEnabled(true)
@@ -145,6 +153,66 @@ function RaidDebuffs:InitializeAuraButton(button)
 	border:SetPoint("TOPLEFT", button, "TOPLEFT", -1, 1)
 	border:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", 1, -1)
 	button:SetAuraBorder(border)
+
+	local duration = button:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	duration:SetPoint("CENTER", button, "CENTER", 0, 0)
+	button:SetDurationText(duration)
+
+	-- These decorations follow the secure button visibility automatically. Never
+	-- inspect its aura identity, duration, or visibility in addon code.
+	local edges = {}
+	for _, points in ipairs({
+		{ "TOPLEFT", "TOPRIGHT", "height" },
+		{ "BOTTOMLEFT", "BOTTOMRIGHT", "height" },
+		{ "TOPLEFT", "BOTTOMLEFT", "width" },
+		{ "TOPRIGHT", "BOTTOMRIGHT", "width" },
+	}) do
+		local edge = button:CreateTexture(nil, "OVERLAY")
+		edge:SetPoint(points[1], button, points[1], 0, 0)
+		edge:SetPoint(points[2], button, points[2], 0, 0)
+		if points[3] == "height" then
+			edge:SetHeight(2)
+		else
+			edge:SetWidth(2)
+		end
+		edge:SetColorTexture(self.highlightColor[1], self.highlightColor[2], self.highlightColor[3], 1)
+		table.insert(edges, edge)
+	end
+	self.buttonVisuals[button] = { edges = edges, duration = duration, count = count }
+	self:ConfigureButtonAppearance(button)
+end
+
+function RaidDebuffs:GetAppearanceSettings()
+	return {
+		size = self:GetIconSize(),
+		highlight = HTF:GetSetting(self.settingPrefix .. "Highlight") == true,
+		countdown = HTF:GetSetting(self.settingPrefix .. "Countdown") == true,
+	}
+end
+
+function RaidDebuffs:ConfigureButtonAppearance(button)
+	local visuals = self.buttonVisuals[button]
+	if not visuals then
+		return
+	end
+	local appearance = self.appliedAppearance or self:GetAppearanceSettings()
+	local size = appearance.size
+	local font = visuals.duration:GetFont()
+	visuals.duration:SetFont(font, math.max(9, math.floor(size * 0.6)), "OUTLINE")
+	local countFont = visuals.count:GetFont()
+	visuals.count:SetFont(countFont, math.max(9, math.floor(size * 0.55)), "OUTLINE")
+	if appearance.countdown then
+		visuals.duration:Show()
+	else
+		visuals.duration:Hide()
+	end
+	for _, edge in ipairs(visuals.edges) do
+		if appearance.highlight then
+			edge:Show()
+		else
+			edge:Hide()
+		end
+	end
 end
 
 function RaidDebuffs:IsSupportedUnit(unit)
@@ -202,36 +270,36 @@ function RaidDebuffs:GetFrameUnit(frame)
 end
 
 function RaidDebuffs:GetAnchor()
-	local anchor = HTF:GetSetting("raidDebuffsAnchor")
-	return self.ANCHORS[anchor] and anchor or "BOTTOMRIGHT"
+	local anchor = HTF:GetSetting(self.settingPrefix .. "Anchor")
+	return self.ANCHORS[anchor] and anchor or self.defaultAnchor
 end
 
 function RaidDebuffs:GetOffsetX()
-	return clampOffset(HTF:GetSetting("raidDebuffsOffsetX"), -2)
+	return clampOffset(HTF:GetSetting(self.settingPrefix .. "OffsetX"), self.defaultOffsetX)
 end
 
 function RaidDebuffs:GetOffsetY()
-	return clampOffset(HTF:GetSetting("raidDebuffsOffsetY"), 2)
+	return clampOffset(HTF:GetSetting(self.settingPrefix .. "OffsetY"), self.defaultOffsetY)
 end
 
 function RaidDebuffs:GetIconSize()
-	return clampIconSize(HTF:GetSetting("raidDebuffsIconSize"))
+	return clampIconSize(HTF:GetSetting(self.settingPrefix .. "IconSize"), self.DEFAULT_ICON_SIZE)
 end
 
 function RaidDebuffs:SetAnchor(anchor)
 	if not self.ANCHORS[anchor] then
 		return false
 	end
-	HTF:SetSetting("raidDebuffsAnchor", anchor)
+	HTF:SetSetting(self.settingPrefix .. "Anchor", anchor)
 	return true
 end
 
 function RaidDebuffs:SetOffset(axis, value)
-	local settingKey = axis == "x" and "raidDebuffsOffsetX" or axis == "y" and "raidDebuffsOffsetY" or nil
+	local settingKey = axis == "x" and self.settingPrefix .. "OffsetX" or axis == "y" and self.settingPrefix .. "OffsetY" or nil
 	if not settingKey then
 		return false
 	end
-	HTF:SetSetting(settingKey, clampOffset(value, axis == "x" and -2 or 2))
+	HTF:SetSetting(settingKey, clampOffset(value, axis == "x" and self.defaultOffsetX or self.defaultOffsetY))
 	return true
 end
 
@@ -250,7 +318,7 @@ function RaidDebuffs:SetIconSize(value)
 	if not HTF:IsSafeNumber(value) then
 		return false
 	end
-	HTF:SetSetting("raidDebuffsIconSize", clampIconSize(value))
+	HTF:SetSetting(self.settingPrefix .. "IconSize", clampIconSize(value, self.DEFAULT_ICON_SIZE))
 	return true
 end
 
@@ -265,10 +333,10 @@ function RaidDebuffs:ResetPosition()
 	if not HTF.db then
 		return
 	end
-	HTF.db.raidDebuffsAnchor = "BOTTOMRIGHT"
-	HTF.db.raidDebuffsOffsetX = -2
-	HTF.db.raidDebuffsOffsetY = 2
-	self:OnSettingChanged("raidDebuffsAnchor")
+	HTF.db[self.settingPrefix .. "Anchor"] = self.defaultAnchor
+	HTF.db[self.settingPrefix .. "OffsetX"] = self.defaultOffsetX
+	HTF.db[self.settingPrefix .. "OffsetY"] = self.defaultOffsetY
+	self:OnSettingChanged(self.settingPrefix .. "Anchor")
 	if HTF.Options and HTF.Options.Refresh then
 		HTF.Options:Refresh()
 	end
@@ -312,6 +380,7 @@ function RaidDebuffs:ConfigureIconSize(container)
 			local button = container:GetAuraGroupFrame(definition.key, frameIndex)
 			if button then
 				button:SetSize(iconSize, iconSize)
+				self:ConfigureButtonAppearance(button)
 			end
 		end
 	end
@@ -355,17 +424,17 @@ function RaidDebuffs:CreateContainer(frame, unit)
 				container:Hide()
 			end)
 		end
-		HTF:Debugf(HTF.L.DEBUG_RAID_DEBUFFS_UNAVAILABLE, HTF:SafeScalarText(result))
+		HTF:Debugf(HTF.L["DEBUG_" .. self.noticePrefix .. "_UNAVAILABLE"], HTF:SafeScalarText(result))
 		if not self.unavailableNotified then
 			self.unavailableNotified = true
-			HTF:Notify(HTF.L.RAID_DEBUFFS_UNAVAILABLE)
+			HTF:Notify(HTF.L[self.noticePrefix .. "_UNAVAILABLE"])
 		end
 		return nil
 	end
 
 	container = result
 	self.containers[frame] = container
-	HTF:Debugf(HTF.L.DEBUG_RAID_DEBUFFS_ATTACHED, unit)
+	HTF:Debugf(HTF.L["DEBUG_" .. self.noticePrefix .. "_ATTACHED"], unit)
 	return container
 end
 
@@ -376,7 +445,9 @@ function RaidDebuffs:SynchronizeFrame(frame, allowCreation)
 
 	local container = self.containers[frame]
 	local unit = self:GetFrameUnit(frame)
-	if HTF:GetSetting("raidDebuffsEnabled") ~= true or not unit then
+	local enabled = HTF:GetSetting(self.settingPrefix .. "Enabled") == true
+	if isCombatLocked() then enabled = self.appliedEnabled == true end
+	if not enabled or not unit then
 		if container then
 			container:SetEnabled(false)
 			container:Hide()
@@ -402,11 +473,11 @@ function RaidDebuffs:SynchronizeFrame(frame, allowCreation)
 end
 
 function RaidDebuffs:OnCompactUnitFrameUpdated(frame)
-	if HTF:GetSetting("raidDebuffsEnabled") ~= true and not self.containers[frame] then
+	if HTF:GetSetting(self.settingPrefix .. "Enabled") ~= true and not self.containers[frame] then
 		return
 	end
 	local combatLocked = isCombatLocked()
-	if combatLocked and HTF:GetSetting("raidDebuffsEnabled") ~= true then
+	if combatLocked and self.appliedEnabled ~= true then
 		self.pendingApply = true
 		return
 	end
@@ -414,7 +485,7 @@ function RaidDebuffs:OnCompactUnitFrameUpdated(frame)
 end
 
 function RaidDebuffs:RefreshKnownFrames()
-	if HTF:GetSetting("raidDebuffsEnabled") ~= true then
+	if HTF:GetSetting(self.settingPrefix .. "Enabled") ~= true then
 		return
 	end
 
@@ -439,15 +510,19 @@ function RaidDebuffs:ApplySettings(notifyPending)
 		self.pendingApply = true
 		if notifyPending and not self.pendingNotified then
 			self.pendingNotified = true
-			HTF:Notify(HTF.L.RAID_DEBUFFS_APPLY_PENDING)
+			HTF:Notify(HTF.L[self.noticePrefix .. "_APPLY_PENDING"])
 		end
 		if not wasPending then
-			HTF:Debug(HTF.L.DEBUG_RAID_DEBUFFS_DEFERRED)
+			HTF:Debug(HTF.L["DEBUG_" .. self.noticePrefix .. "_DEFERRED"])
 		end
 		return false
 	end
 
-	local enabled = HTF:GetSetting("raidDebuffsEnabled") == true
+	-- New pooled buttons can be initialized during combat: use only the last
+	-- applied appearance until the deferred settings are allowed to take effect.
+	self.appliedAppearance = self:GetAppearanceSettings()
+	local enabled = HTF:GetSetting(self.settingPrefix .. "Enabled") == true
+	self.appliedEnabled = enabled
 	if enabled then
 		self:RefreshKnownFrames()
 	end
@@ -506,15 +581,15 @@ function RaidDebuffs:OnEvent(event, loadedAddon)
 	if event == "PLAYER_REGEN_ENABLED" then
 		if self.pendingApply then
 			if self:ApplySettings(false) then
-				HTF:Debug(HTF.L.DEBUG_RAID_DEBUFFS_APPLIED)
+				HTF:Debug(HTF.L["DEBUG_" .. self.noticePrefix .. "_APPLIED"])
 			end
 		end
 	elseif event == "PLAYER_LOGIN" or event == "GROUP_ROSTER_UPDATE" then
-		if HTF:GetSetting("raidDebuffsEnabled") == true then
+		if HTF:GetSetting(self.settingPrefix .. "Enabled") == true then
 			self:ApplySettings(false)
 		end
 	elseif event == "ADDON_LOADED" and loadedAddon == "Blizzard_CompactRaidFrames" then
-		if HTF:GetSetting("raidDebuffsEnabled") == true then
+		if HTF:GetSetting(self.settingPrefix .. "Enabled") == true then
 			self:ApplySettings(false)
 		end
 	end
@@ -526,7 +601,9 @@ function RaidDebuffs:Initialize()
 	end
 
 	self.initialized = true
+	self.appliedEnabled = false
 	self.containers = setmetatable({}, { __mode = "k" })
+	self.buttonVisuals = setmetatable({}, { __mode = "k" })
 	self.eventFrame = CreateFrame("Frame")
 	self.eventFrame:RegisterEvent("PLAYER_LOGIN")
 	self.eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -544,7 +621,7 @@ function RaidDebuffs:Initialize()
 		self.creationFailed = true
 	end
 
-	if HTF:GetSetting("raidDebuffsEnabled") == true then
+	if HTF:GetSetting(self.settingPrefix .. "Enabled") == true then
 		self:ApplySettings(false)
 	end
 end

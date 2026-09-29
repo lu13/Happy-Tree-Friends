@@ -282,6 +282,7 @@ function Options:CreateOverviewPage(page)
 		{ key = "autoSellJunk", label = HTF.L.AUTO_SELL_JUNK },
 		{ key = "friendlyNamesOnly", label = HTF.L.FRIENDLY_NAMES_ONLY },
 		{ key = "raidDebuffsEnabled", label = HTF.L.RAID_DEBUFFS },
+		{ key = "raidBuffsEnabled", label = HTF.L.RAID_BUFFS },
 		{ key = "debug", label = HTF.L.DEBUG_MODE },
 	}
 
@@ -404,9 +405,38 @@ function Options:CreateRaidDebuffsPage(page)
 	self:CreateCompactToggleRow(page, "left", -230, "raidDebuffsShowRaidInCombat", HTF.L.RAID_DEBUFFS_RAID_IN_COMBAT, HTF.L.RAID_DEBUFFS_RAID_IN_COMBAT_DESC)
 	self:CreateCompactToggleRow(page, "right", -230, "raidDebuffsShowShortOther", HTF.L.RAID_DEBUFFS_SHORT_OTHER, HTF.L.RAID_DEBUFFS_SHORT_OTHER_DESC)
 
+	self:CreateAuraLayoutControls(page, HTF.RaidDebuffs, "raidDebuff", -300)
+	self:CreateCompactToggleRow(page, "left", -522, "raidDebuffsHighlight", HTF.L.AURA_HIGHLIGHT, HTF.L.AURA_HIGHLIGHT_DESC)
+	self:CreateCompactToggleRow(page, "right", -522, "raidDebuffsCountdown", HTF.L.AURA_COUNTDOWN, HTF.L.AURA_COUNTDOWN_DESC)
+
+	local note = CreateFrame("Frame", nil, page, "BackdropTemplate")
+	note:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -594)
+	note:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, -594)
+	note:SetHeight(66)
+	applyBackdrop(note, COLORS.panel, COLORS.border)
+	local noteText = createText(note, "GameFontHighlightSmall", HTF.L.RAID_DEBUFFS_LIMIT_NOTICE, 11, COLORS.muted)
+	noteText:SetPoint("TOPLEFT", 14, -13)
+	noteText:SetPoint("TOPRIGHT", -14, -13)
+	noteText:SetJustifyH("LEFT")
+	noteText:SetJustifyV("TOP")
+end
+
+function Options:CreateRaidBuffsPage(page)
+	self:AddPageHeader(page, HTF.L.RAID_BUFFS, HTF.L.RAID_BUFFS_PAGE_HELP)
+	self:CreateToggleRow(page, -84, "raidBuffsEnabled", HTF.L.RAID_BUFFS_ENABLED, HTF.L.RAID_BUFFS_ENABLED_DESC)
+	self:CreateCompactToggleRow(page, "left", -164, "raidBuffsHighlight", HTF.L.AURA_HIGHLIGHT, HTF.L.AURA_HIGHLIGHT_DESC)
+	self:CreateCompactToggleRow(page, "right", -164, "raidBuffsCountdown", HTF.L.AURA_COUNTDOWN, HTF.L.AURA_COUNTDOWN_DESC)
+	self:CreateAuraLayoutControls(page, HTF.RaidBuffs, "raidBuff", -240)
+	local help = createText(page, "GameFontHighlightSmall", HTF.L.RAID_BUFFS_NOTICE, 11, COLORS.muted)
+	help:SetPoint("TOPLEFT", 34, -470)
+	help:SetPoint("TOPRIGHT", -34, -470)
+	help:SetJustifyH("LEFT")
+end
+
+function Options:CreateAuraLayoutControls(page, module, prefix, yOffset)
 	local positionCard = CreateFrame("Frame", nil, page, "BackdropTemplate")
-	positionCard:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -300)
-	positionCard:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, -300)
+	positionCard:SetPoint("TOPLEFT", page, "TOPLEFT", 20, yOffset)
+	positionCard:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, yOffset)
 	positionCard:SetHeight(72)
 	applyBackdrop(positionCard, COLORS.sidebar, COLORS.border)
 
@@ -417,7 +447,7 @@ function Options:CreateRaidDebuffsPage(page)
 	positionHelp:SetWidth(190)
 	positionHelp:SetJustifyH("LEFT")
 
-	self.raidDebuffAnchorButtons = {}
+	self[prefix .. "AnchorButtons"] = {}
 	local anchorDefinitions = {
 		{ key = "TOPLEFT", label = HTF.L.RAID_DEBUFFS_ANCHOR_TOPLEFT },
 		{ key = "TOPRIGHT", label = HTF.L.RAID_DEBUFFS_ANCHOR_TOPRIGHT },
@@ -432,7 +462,7 @@ function Options:CreateRaidDebuffsPage(page)
 		if previousButton then
 			button:SetPoint("LEFT", previousButton, "RIGHT", 7, 0)
 		else
-			button:SetPoint("LEFT", positionCard, "LEFT", 224, 0)
+			button:SetPoint("LEFT", positionCard, "LEFT", 210, 0)
 		end
 
 		function button:SetSelected(selected)
@@ -453,17 +483,17 @@ function Options:CreateRaidDebuffsPage(page)
 			self:SetSelected(self.selected)
 		end)
 		button:SetScript("OnClick", function()
-			if HTF.RaidDebuffs then
-				HTF.RaidDebuffs:SetAnchor(anchorKey)
+			if module then
+				module:SetAnchor(anchorKey)
 			end
 		end)
-		self.raidDebuffAnchorButtons[anchorKey] = button
+		self[prefix .. "AnchorButtons"][anchorKey] = button
 		previousButton = button
 	end
 
 	local offsetCard = CreateFrame("Frame", nil, page, "BackdropTemplate")
-	offsetCard:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -382)
-	offsetCard:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, -382)
+	offsetCard:SetPoint("TOPLEFT", page, "TOPLEFT", 20, yOffset - 82)
+	offsetCard:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, yOffset - 82)
 	offsetCard:SetHeight(60)
 	applyBackdrop(offsetCard, COLORS.sidebar, COLORS.border)
 
@@ -477,7 +507,7 @@ function Options:CreateRaidDebuffsPage(page)
 		minus:SetSize(28, 26)
 		minus:SetPoint("LEFT", axisLabel, "RIGHT", 8, 0)
 		minus:SetScript("OnClick", function()
-			HTF.RaidDebuffs:AdjustOffset(axis, -1)
+			module:AdjustOffset(axis, -1)
 		end)
 		local value = createText(offsetCard, "GameFontNormal", "", 12, COLORS.accent)
 		value:SetPoint("LEFT", minus, "RIGHT", 8, 0)
@@ -487,24 +517,24 @@ function Options:CreateRaidDebuffsPage(page)
 		plus:SetSize(28, 26)
 		plus:SetPoint("LEFT", value, "RIGHT", 8, 0)
 		plus:SetScript("OnClick", function()
-			HTF.RaidDebuffs:AdjustOffset(axis, 1)
+			module:AdjustOffset(axis, 1)
 		end)
 		return value
 	end
 
-	self.raidDebuffOffsetXValue = createOffsetControl("x", HTF.L.RAID_DEBUFFS_OFFSET_X, 140)
-	self.raidDebuffOffsetYValue = createOffsetControl("y", HTF.L.RAID_DEBUFFS_OFFSET_Y, 300)
+	self[prefix .. "OffsetXValue"] = createOffsetControl("x", HTF.L.RAID_DEBUFFS_OFFSET_X, 140)
+	self[prefix .. "OffsetYValue"] = createOffsetControl("y", HTF.L.RAID_DEBUFFS_OFFSET_Y, 300)
 
 	local resetButton = createActionButton(offsetCard, HTF.L.RAID_DEBUFFS_RESET_POSITION)
 	resetButton:SetSize(112, 28)
 	resetButton:SetPoint("RIGHT", offsetCard, "RIGHT", -12, 0)
 	resetButton:SetScript("OnClick", function()
-		HTF.RaidDebuffs:ResetPosition()
+		module:ResetPosition()
 	end)
 
 	local sizeCard = CreateFrame("Frame", nil, page, "BackdropTemplate")
-	sizeCard:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -452)
-	sizeCard:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, -452)
+	sizeCard:SetPoint("TOPLEFT", page, "TOPLEFT", 20, yOffset - 152)
+	sizeCard:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, yOffset - 152)
 	sizeCard:SetHeight(60)
 	applyBackdrop(sizeCard, COLORS.sidebar, COLORS.border)
 
@@ -516,34 +546,23 @@ function Options:CreateRaidDebuffsPage(page)
 	sizeHelp:SetJustifyH("LEFT")
 
 	local sizeMinus = createActionButton(sizeCard, "−")
-	self.raidDebuffIconSizeMinusButton = sizeMinus
+	self[prefix .. "IconSizeMinusButton"] = sizeMinus
 	sizeMinus:SetSize(28, 26)
 	sizeMinus:SetPoint("LEFT", sizeCard, "LEFT", 410, 0)
 	sizeMinus:SetScript("OnClick", function()
-		HTF.RaidDebuffs:AdjustIconSize(-1)
+		module:AdjustIconSize(-1)
 	end)
-	self.raidDebuffIconSizeValue = createText(sizeCard, "GameFontNormal", "", 12, COLORS.accent)
-	self.raidDebuffIconSizeValue:SetPoint("LEFT", sizeMinus, "RIGHT", 8, 0)
-	self.raidDebuffIconSizeValue:SetWidth(30)
-	self.raidDebuffIconSizeValue:SetJustifyH("CENTER")
+	self[prefix .. "IconSizeValue"] = createText(sizeCard, "GameFontNormal", "", 12, COLORS.accent)
+	self[prefix .. "IconSizeValue"]:SetPoint("LEFT", sizeMinus, "RIGHT", 8, 0)
+	self[prefix .. "IconSizeValue"]:SetWidth(30)
+	self[prefix .. "IconSizeValue"]:SetJustifyH("CENTER")
 	local sizePlus = createActionButton(sizeCard, "+")
-	self.raidDebuffIconSizePlusButton = sizePlus
+	self[prefix .. "IconSizePlusButton"] = sizePlus
 	sizePlus:SetSize(28, 26)
-	sizePlus:SetPoint("LEFT", self.raidDebuffIconSizeValue, "RIGHT", 8, 0)
+	sizePlus:SetPoint("LEFT", self[prefix .. "IconSizeValue"], "RIGHT", 8, 0)
 	sizePlus:SetScript("OnClick", function()
-		HTF.RaidDebuffs:AdjustIconSize(1)
+		module:AdjustIconSize(1)
 	end)
-
-	local note = CreateFrame("Frame", nil, page, "BackdropTemplate")
-	note:SetPoint("TOPLEFT", page, "TOPLEFT", 20, -522)
-	note:SetPoint("TOPRIGHT", page, "TOPRIGHT", -20, -522)
-	note:SetHeight(66)
-	applyBackdrop(note, COLORS.panel, COLORS.border)
-	local noteText = createText(note, "GameFontHighlightSmall", HTF.L.RAID_DEBUFFS_LIMIT_NOTICE, 11, COLORS.muted)
-	noteText:SetPoint("TOPLEFT", 14, -13)
-	noteText:SetPoint("TOPRIGHT", -14, -13)
-	noteText:SetJustifyH("LEFT")
-	noteText:SetJustifyV("TOP")
 end
 
 function Options:RefreshFriendlyNameSettings()
@@ -552,23 +571,23 @@ function Options:RefreshFriendlyNameSettings()
 	end
 end
 
-function Options:RefreshRaidDebuffSettings()
-	if not HTF.RaidDebuffs then
+function Options:RefreshAuraSettings(module, prefix)
+	if not module then
 		return
 	end
-	local anchor = HTF.RaidDebuffs:GetAnchor()
-	for key, button in pairs(self.raidDebuffAnchorButtons or {}) do
-		button:SetSelected(key == anchor)
+	for key, button in pairs(self[prefix .. "AnchorButtons"] or {}) do
+		button:SetSelected(key == module:GetAnchor())
 	end
-	if self.raidDebuffOffsetXValue then
-		self.raidDebuffOffsetXValue:SetText(tostring(HTF.RaidDebuffs:GetOffsetX()))
+	for suffix, value in pairs({ OffsetXValue = module:GetOffsetX(), OffsetYValue = module:GetOffsetY(), IconSizeValue = module:GetIconSize() }) do
+		if self[prefix .. suffix] then
+			self[prefix .. suffix]:SetText(tostring(value))
+		end
 	end
-	if self.raidDebuffOffsetYValue then
-		self.raidDebuffOffsetYValue:SetText(tostring(HTF.RaidDebuffs:GetOffsetY()))
-	end
-	if self.raidDebuffIconSizeValue then
-		self.raidDebuffIconSizeValue:SetText(tostring(HTF.RaidDebuffs:GetIconSize()))
-	end
+end
+
+function Options:RefreshRaidDebuffSettings()
+	self:RefreshAuraSettings(HTF.RaidDebuffs, "raidDebuff")
+	self:RefreshAuraSettings(HTF.RaidBuffs, "raidBuff")
 end
 
 function Options:CreateDebugPage(page)
@@ -742,7 +761,8 @@ function Options:CreatePanel()
 	self:CreateNavigationButton(sidebar, "merchant", HTF.L.MERCHANT, -160)
 	self:CreateNavigationButton(sidebar, "nameplates", HTF.L.NAMEPLATES, -204)
 	self:CreateNavigationButton(sidebar, "raidDebuffs", HTF.L.RAID_DEBUFFS, -248)
-	self:CreateNavigationButton(sidebar, "debug", HTF.L.DEBUG, -292)
+	self:CreateNavigationButton(sidebar, "raidBuffs", HTF.L.RAID_BUFFS, -292)
+	self:CreateNavigationButton(sidebar, "debug", HTF.L.DEBUG, -336)
 
 	local sidebarHelp = createText(sidebar, "GameFontHighlightSmall", "/htf", 12, COLORS.accent)
 	sidebarHelp:SetPoint("BOTTOMLEFT", 18, 23)
@@ -753,7 +773,7 @@ function Options:CreatePanel()
 	content:SetPoint("TOPLEFT", sidebar, "TOPRIGHT", 1, 0)
 	content:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 0)
 
-	for _, key in ipairs({ "overview", "merchant", "nameplates", "raidDebuffs", "debug" }) do
+	for _, key in ipairs({ "overview", "merchant", "nameplates", "raidDebuffs", "raidBuffs", "debug" }) do
 		local page = CreateFrame("Frame", nil, content)
 		page:SetAllPoints(content)
 		page:Hide()
@@ -763,7 +783,14 @@ function Options:CreatePanel()
 	self:CreateOverviewPage(self.pages.overview)
 	self:CreateMerchantPage(self.pages.merchant)
 	self:CreateNameplatesPage(self.pages.nameplates)
-	self:CreateRaidDebuffsPage(self.pages.raidDebuffs)
+	local debuffScroll = CreateFrame("ScrollFrame", nil, self.pages.raidDebuffs, "UIPanelScrollFrameTemplate")
+	debuffScroll:SetPoint("TOPLEFT", 0, 0)
+	debuffScroll:SetPoint("BOTTOMRIGHT", -26, 8)
+	local debuffContent = CreateFrame("Frame", nil, debuffScroll)
+	debuffContent:SetSize(623, 674)
+	debuffScroll:SetScrollChild(debuffContent)
+	self:CreateRaidDebuffsPage(debuffContent)
+	self:CreateRaidBuffsPage(self.pages.raidBuffs)
 	self:CreateDebugPage(self.pages.debug)
 
 	local closeButton = CreateFrame("Button", nil, panel, "UIPanelCloseButton")

@@ -19,6 +19,15 @@ HTF.defaults = {
 	raidDebuffsShowRaidInCombat = true,
 	raidDebuffsShowShortOther = true,
 	raidDebuffsIconSize = 12,
+	raidDebuffsHighlight = false,
+	raidDebuffsCountdown = false,
+	raidBuffsEnabled = false,
+	raidBuffsIconSize = 18,
+	raidBuffsAnchor = "TOPLEFT",
+	raidBuffsOffsetX = 2,
+	raidBuffsOffsetY = -2,
+	raidBuffsHighlight = true,
+	raidBuffsCountdown = true,
 	raidDebuffsAnchor = "BOTTOMRIGHT",
 	raidDebuffsOffsetX = -2,
 	raidDebuffsOffsetY = 2,
@@ -101,6 +110,9 @@ function HTF:SetSetting(key, value)
 	end
 	if self.RaidDebuffs and self.RaidDebuffs.OnSettingChanged then
 		self.RaidDebuffs:OnSettingChanged(key)
+	end
+	if self.RaidBuffs and self.RaidBuffs.OnSettingChanged then
+		self.RaidBuffs:OnSettingChanged(key)
 	end
 	if self.Options and self.Options.Refresh then
 		self.Options:Refresh()
@@ -235,6 +247,19 @@ function HTF:BuildDiagnosticReport()
 		table.insert(lines, string.format("- raidDebuffsTrackedFrames: %d", self.RaidDebuffs:GetTrackedFrameCount()))
 		table.insert(lines, string.format("- raidDebuffsPending: %s", tostring(self.RaidDebuffs.pendingApply == true)))
 	end
+	for _, prefix in ipairs({ "raidBuffs", "raidDebuffs" }) do
+		for _, suffix in ipairs({ "Highlight", "Countdown" }) do
+			table.insert(lines, string.format("- %s%s: %s", prefix, suffix, tostring(self:GetSetting(prefix .. suffix) == true)))
+		end
+	end
+	for _, suffix in ipairs({ "Enabled", "Anchor", "IconSize", "OffsetX", "OffsetY" }) do
+		table.insert(lines, string.format("- raidBuffs%s: %s", suffix, self:SafeScalarText(self:GetSetting("raidBuffs" .. suffix))))
+	end
+	if self.RaidBuffs then
+		table.insert(lines, string.format("- raidBuffsAvailable: %s", tostring(self.RaidBuffs:IsAvailable())))
+		table.insert(lines, string.format("- raidBuffsTrackedFrames: %d", self.RaidBuffs:GetTrackedFrameCount()))
+		table.insert(lines, string.format("- raidBuffsPending: %s", tostring(self.RaidBuffs.pendingApply == true)))
+	end
 	if ledger then
 		table.insert(lines, string.format("- sessionRepairs: %s", self:FormatMoney(ledger.repairTotal)))
 		table.insert(lines, string.format("- sessionJunkIncome: %s", ledger.junkIncomeKnown and self:FormatMoney(ledger.junkIncome) or "<unavailable>"))
@@ -319,6 +344,11 @@ function HTF:HandleSlashCommand(input)
 
 	if command == "nameplates" or command == self.L.COMMAND_NAMEPLATES_ALIAS then
 		self:OpenOptions("nameplates")
+		return
+	end
+
+	if command == "buffs" or command == self.L.COMMAND_BUFFS_ALIAS then
+		self:OpenOptions("raidBuffs")
 		return
 	end
 
@@ -408,6 +438,9 @@ function HTF:Initialize()
 	end
 	if self.RaidDebuffs then
 		self.RaidDebuffs:Initialize()
+	end
+	if self.RaidBuffs then
+		self.RaidBuffs:Initialize()
 	end
 	if self.Options then
 		self.Options:Initialize()

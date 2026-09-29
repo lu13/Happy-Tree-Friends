@@ -248,6 +248,10 @@ function objectMethods:SetApplicationCount(count)
 	self.applicationCount = count
 end
 
+function objectMethods:SetDurationText(fontString)
+	self.durationText = fontString
+end
+
 function objectMethods:SetAuraBorder(border)
 	self.auraBorder = border
 end
@@ -921,6 +925,7 @@ for _, path in ipairs({
 	"HappyTreeFriends/Locales.lua",
 	"HappyTreeFriends/Core.lua",
 	"HappyTreeFriends/RaidDebuffs.lua",
+	"HappyTreeFriends/RaidBuffs.lua",
 	"HappyTreeFriends/FriendlyNames.lua",
 	"HappyTreeFriends/Merchant.lua",
 	"HappyTreeFriends/Options.lua",
@@ -1161,6 +1166,118 @@ equal(HTF.RaidDebuffs:GetOffsetX(), -2, "position reset restores the default hor
 equal(HTF.RaidDebuffs:GetOffsetY(), 2, "position reset restores the default vertical offset")
 HTF:SetSetting("raidDebuffsEnabled", false)
 
+-- Key buffs share the secure layout engine, but keep settings and state separate.
+equal(HTF:GetSetting("raidBuffsEnabled"), false, "key buffs are opt-in")
+equal(HTF.RaidBuffs:GetIconSize(), 18, "key buffs default to a larger icon")
+check(HTF.RaidBuffs.containers ~= HTF.RaidDebuffs.containers, "buff and debuff tracking is independent")
+check(HTF.RaidBuffs.buttonVisuals ~= HTF.RaidDebuffs.buttonVisuals, "buff and debuff appearance state is independent")
+HTF:SetSetting("raidBuffsEnabled", true)
+local buffContainer = HTF.RaidBuffs:GetContainer(partyMember)
+check(buffContainer ~= nil, "key buffs attach to party frames")
+check(HTF.RaidBuffs:GetContainer(raidMember) ~= nil, "key buffs attach to raid frames")
+equal(HTF.RaidBuffs:GetContainer(partyPet), nil, "key buffs exclude pets")
+equal(HTF.RaidBuffs:GetContainer(raidTarget), nil, "key buffs exclude target frames")
+CompactUnitFrame_UpdateAll(thirdPartyFrame)
+equal(HTF.RaidBuffs:GetContainer(thirdPartyFrame), nil, "key buffs exclude third-party frames")
+local buffGroup = buffContainer.auraGroups.beaconOfVirtue
+equal(buffGroup.filterString, "HELPFUL|PLAYER", "key buffs only track the player's helpful auras")
+check(buffGroup.options.candidateFilters.includeSpellIDs[200025], "Beacon of Virtue uses secure spell-ID filtering")
+equal(buffGroup.maxFrameCount, 1, "one Beacon icon is shown per unit")
+local buffButton = buffGroup.sampleButton
+local buffVisuals = HTF.RaidBuffs.buttonVisuals[buffButton]
+equal(buffButton.width, 18, "initial key buff icon size applies")
+check(buffVisuals.edges[1]:IsShown(), "key buffs start with a bright border")
+check(buffVisuals.duration:IsShown(), "key buffs start with countdown text")
+equal(buffButton.durationText, buffVisuals.duration, "countdown is driven by the secure duration binding")
+for anchor, directions in pairs({
+	TOPLEFT = { "Right", "Down" }, TOPRIGHT = { "Left", "Down" },
+	BOTTOMLEFT = { "Right", "Up" }, BOTTOMRIGHT = { "Left", "Up" },
+}) do
+	HTF.RaidBuffs:SetAnchor(anchor)
+	equal(buffContainer.layoutAnchor, anchor, "key buffs support corner " .. anchor)
+	equal(buffContainer.growthDirection[1], directions[1], "horizontal flow matches " .. anchor)
+	equal(buffContainer.growthDirection[2], directions[2], "vertical flow matches " .. anchor)
+end
+HTF.RaidBuffs:SetOffset("x", 99)
+HTF.RaidBuffs:SetOffset("y", -99)
+equal(buffContainer.points[1][4], 40, "buff horizontal offsets are bounded")
+equal(buffContainer.points[1][5], -40, "buff vertical offsets are bounded")
+equal(HTF.RaidDebuffs:GetOffsetX(), -2, "buff offsets do not alter debuff settings")
+check(not HTF.RaidBuffs:SetAnchor("CENTER"), "invalid buff corners are rejected")
+check(not HTF.RaidBuffs:SetOffset("z", 3), "invalid buff offset axes are rejected")
+HTF.RaidBuffs:ResetPosition()
+equal(buffContainer.layoutAnchor, "TOPLEFT", "buff reset uses its own default corner")
+equal(buffContainer.points[1][4], 2, "buff reset uses its own horizontal default")
+equal(buffContainer.points[1][5], -2, "buff reset uses its own vertical default")
+
+combatLocked = true
+HTF:SetSetting("raidBuffsHighlight", false)
+HTF:SetSetting("raidBuffsCountdown", false)
+HTF.RaidBuffs:SetIconSize(22)
+HTF.RaidBuffs:SetAnchor("BOTTOMLEFT")
+check(buffVisuals.edges[1]:IsShown(), "combat defers bright-border changes")
+check(buffVisuals.duration:IsShown(), "combat defers countdown changes")
+equal(buffButton.width, 18, "combat defers buff size changes")
+equal(buffContainer.layoutAnchor, "TOPLEFT", "combat defers buff position changes")
+check(HTF.RaidBuffs.pendingApply, "buff changes wait for combat end")
+check(not HTF.RaidDebuffs.pendingApply, "buff changes do not queue debuff updates")
+-- Secure pools may allocate buttons during combat. Pending appearance must not leak.
+local pooledBuff = newObject("AuraButton", nil, buffContainer, "CustomAuraButtonTemplate")
+buffGroup.options.initializeFrame(pooledBuff)
+table.insert(buffGroup.frames, pooledBuff)
+equal(pooledBuff.width, 18, "new pooled buttons use the last applied size during combat")
+check(HTF.RaidBuffs.buttonVisuals[pooledBuff].edges[1]:IsShown(), "new pooled buttons use the last applied border during combat")
+partyMember.displayedUnit = "party3"
+CompactUnitFrame_UpdateAll(partyMember)
+equal(buffContainer:GetUnit(), "party3", "buff containers follow reassigned units in combat")
+combatLocked = false
+fireEvent("PLAYER_REGEN_ENABLED")
+equal(buffButton.width, 22, "buff size applies after combat")
+equal(pooledBuff.width, 22, "pooled buttons also receive deferred appearance")
+equal(buffContainer.layoutAnchor, "BOTTOMLEFT", "buff corner applies after combat")
+check(not buffVisuals.edges[1]:IsShown(), "buff border disables after combat")
+check(not buffVisuals.duration:IsShown(), "buff countdown disables after combat")
+check(not HTF.RaidBuffs.pendingApply, "buff pending state clears after combat")
+
+HTF:SetSetting("raidDebuffsEnabled", true)
+HTF:SetSetting("raidDebuffsHighlight", true)
+HTF:SetSetting("raidDebuffsCountdown", true)
+local debuffVisuals = HTF.RaidDebuffs.buttonVisuals[sampleAuraButton]
+check(debuffVisuals.edges[1]:IsShown(), "existing debuff buttons gain bright borders")
+check(debuffVisuals.duration:IsShown(), "existing debuff buttons gain countdowns")
+check(not buffVisuals.edges[1]:IsShown(), "debuff appearance does not change buffs")
+combatLocked = true
+HTF:SetSetting("raidBuffsEnabled", false)
+partyMember.displayedUnit = "party4"
+CompactUnitFrame_UpdateAll(partyMember)
+equal(buffContainer:GetUnit(), "party4", "pending disable still tracks unit reassignment")
+check(buffContainer:IsEnabled(), "buff disable waits for combat even on frame refresh")
+combatLocked = false
+fireEvent("PLAYER_REGEN_ENABLED")
+check(not buffContainer:IsEnabled(), "buff disable applies after combat")
+check(partyAuraContainer:IsEnabled(), "buff disable leaves debuffs enabled")
+combatLocked = true
+HTF:SetSetting("raidBuffsEnabled", true)
+CompactUnitFrame_UpdateAll(partyMember)
+check(not buffContainer:IsEnabled(), "frame refresh cannot bypass deferred buff re-enable")
+combatLocked = false
+fireEvent("PLAYER_REGEN_ENABLED")
+check(buffContainer:IsEnabled(), "buff re-enable applies after combat")
+partyMember.displayedUnit = "partypet1"
+CompactUnitFrame_UpdateAll(partyMember)
+check(not buffContainer:IsEnabled(), "recycled frames with unsupported units hide key buffs")
+partyMember.displayedUnit = "party1"
+CompactUnitFrame_UpdateAll(partyMember)
+check(buffContainer:IsEnabled(), "recycled party frames re-enable key buffs")
+HTF:SetSetting("raidBuffsEnabled", false)
+HTF:SetSetting("raidBuffsHighlight", true)
+HTF:SetSetting("raidBuffsCountdown", true)
+HTF.RaidBuffs:SetIconSize(18)
+HTF.RaidBuffs:ResetPosition()
+HTF:SetSetting("raidDebuffsEnabled", false)
+HTF:SetSetting("raidDebuffsHighlight", false)
+HTF:SetSetting("raidDebuffsCountdown", false)
+
 for _, frame in ipairs(frames) do
 	check(frame.scripts.OnUpdate == nil, "addon frames do not use OnUpdate polling")
 end
@@ -1247,6 +1364,24 @@ check(friendlyNamesToggleRow ~= nil, "friendly names page exposes its mode toggl
 check(friendlyNameFontToggleRow ~= nil, "friendly names page exposes its custom-size toggle")
 check(HTF.Options.friendlyNameClassColorToggleRow == nil, "friendly names page omits the removed class-color toggle")
 equal(HTF.Options.friendlyNameFontValue:GetText(), "14", "friendly names page displays the default name font size")
+
+HTF:HandleSlashCommand("buffs")
+check(HTF.Options:IsPageVisible("raidBuffs"), "/htf buffs opens key buff settings")
+HTF.Options.raidBuffAnchorButtons.BOTTOMLEFT.scripts.OnClick()
+equal(HTF:GetSetting("raidBuffsAnchor"), "BOTTOMLEFT", "buff corner UI saves independently")
+HTF.Options.raidBuffIconSizePlusButton.scripts.OnClick()
+equal(HTF:GetSetting("raidBuffsIconSize"), 19, "buff size UI saves increments")
+equal(HTF.Options.raidBuffIconSizeValue:GetText(), "19", "buff size UI refreshes")
+HTF.Options.raidBuffIconSizeMinusButton.scripts.OnClick()
+HTF.RaidBuffs:ResetPosition()
+for _, row in ipairs(HTF.Options.toggles) do
+	if row.settingKey == "raidBuffsHighlight" or row.settingKey == "raidDebuffsCountdown" then
+		local previous = HTF:GetSetting(row.settingKey)
+		row.scripts.OnClick()
+		equal(HTF:GetSetting(row.settingKey), not previous, "appearance toggle updates " .. row.settingKey)
+		row.scripts.OnClick()
+	end
+end
 
 HTF:HandleSlashCommand("debuffs")
 check(HTF.Options:IsPageVisible("raidDebuffs"), "/htf debuffs opens the raid debuff page")
@@ -1676,6 +1811,10 @@ contains(report, "friendlyNamesOnly: false", "diagnostic report includes friendl
 check(not report:find("friendlyNameClassColors", 1, true), "diagnostic report omits the removed class-color setting")
 contains(report, "friendlyNameCustomFontSize: false", "diagnostic report includes friendly name custom-size setting")
 contains(report, "friendlyNameFontSize: 14", "diagnostic report includes friendly name font size")
+contains(report, "raidBuffsEnabled: false", "diagnostics include key buff enable state")
+contains(report, "raidBuffsAnchor: TOPLEFT", "diagnostics include key buff corner")
+contains(report, "raidBuffsHighlight: true", "diagnostics include key buff border")
+contains(report, "raidBuffsPending: false", "diagnostics include deferred buff state")
 contains(report, "raidDebuffsEnabled: false", "diagnostic report includes the raid debuff master setting")
 contains(report, "raidDebuffsShowBleed: true", "diagnostic report includes the bleed category setting")
 contains(report, "raidDebuffsShowShortOther: true", "diagnostic report includes the short-other category setting")

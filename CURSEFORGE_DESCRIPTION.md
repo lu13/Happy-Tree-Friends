@@ -13,6 +13,15 @@ Happy Tree Friends is a lightweight quality-of-life toolkit for **World of Warcr
 - A clean standalone settings window
 - English and Simplified Chinese localization, debug logs, and copyable diagnostics
 
+## Aura Position and Appearance
+
+- Open `/htf buffs` to enable a separate icon for your own Beacon of Virtue (spell 200025). This is currently the only tracked buff.
+- The buff defaults to the top-left corner at 18 pixels, with a steady gold border and countdown. Choose any corner, adjust horizontal/vertical offsets, or set its size from 8 to 24 pixels.
+- Extra debuffs in `/htf debuffs` have independent position and size controls, plus optional orange-red borders and outlined countdowns. Scroll down for the appearance controls.
+- Key buffs start disabled. Debuff borders and countdowns also start disabled to preserve existing preferences. Borders do not flash.
+- These controls affect HTF's additional icons. Blizzard's original buff/debuff icons stay in place, so Beacon of Virtue may appear in both displays.
+- Changes made during combat are saved and applied when combat ends.
+
 ## Commands
 
 - `/htf` — Settings
