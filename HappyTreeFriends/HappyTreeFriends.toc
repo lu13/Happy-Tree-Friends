@@ -1,9 +1,9 @@
-## Interface: 120100
+## Interface: 120100, 120105
 ## Title: Happy Tree Friends
 ## Notes: An event-driven WoW Retail toolkit with raid debuff enhancements, safe merchant automation, and friendly-name controls.
 ## Notes-zhCN: 事件驱动的正式服日常工具：团队减益增强、安全修理/售灰装和友方姓名控制。
 ## Author: Happy Tree Friends
-## Version: 0.8.0
+## Version: 0.9.0
 ## Dependencies: Blizzard_AuraContainer, Blizzard_UnitFrame
 ## SavedVariables: HappyTreeFriendsDB
 

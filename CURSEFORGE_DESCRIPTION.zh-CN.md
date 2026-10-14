@@ -1,6 +1,6 @@
 # Happy Tree Friends
 
-Happy Tree Friends 是一款适用于 **《魔兽世界》正式服 12.1** 的轻量日常工具合集。
+Happy Tree Friends 是一款适用于 **《魔兽世界》正式服 12.1 / 12.1.5** 的轻量日常工具合集。
 
 ## 主要功能
 

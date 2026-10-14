@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-Happy Tree Friends is a lightweight quality-of-life addon for **World of Warcraft Retail 12.1**. It brings secure raid-debuff enhancements, merchant automation, and friendly-player name controls together in one clean settings window.
+Happy Tree Friends is a lightweight quality-of-life addon for **World of Warcraft Retail 12.1 / 12.1.5**. It brings secure raid-debuff enhancements, merchant automation, and friendly-player name controls together in one clean settings window.
 
 ## Features
 
@@ -40,8 +40,8 @@ Happy Tree Friends is a lightweight quality-of-life addon for **World of Warcraf
 
 ## Compatibility
 
-- World of Warcraft Retail 12.1
-- Interface version 120100
+- World of Warcraft Retail 12.1 / 12.1.5
+- Interface versions 120100 / 120105
 - English and Simplified Chinese
 
 ## Raid Debuff Limitation

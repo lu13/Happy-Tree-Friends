@@ -936,7 +936,7 @@ for _, path in ipairs({
 end
 
 fireEvent("ADDON_LOADED", "HappyTreeFriends")
-equal(HTF.VERSION, "0.8.0", "addon version")
+equal(HTF.VERSION, "0.9.0", "addon version")
 equal(HTF.LOCALE, testLocale, "addon selects the active supported locale")
 equal(HTF.CLIENT_LOCALE, testLocale, "addon records the client locale")
 equal(HTF.L.SETTINGS, testLocale == "zhCN" and "设置" or "Settings", "selected locale exposes translated settings text")
@@ -948,7 +948,7 @@ for key in pairs(HTF.LOCALES.zhCN) do
 	check(HTF.LOCALES.enUS[key] ~= nil, "English locale includes zhCN key: " .. key)
 end
 local formatCases = {
-	VERSION_LABEL = { "0.8.0" },
+	VERSION_LABEL = { "0.9.0" },
 	REPAIRED_PERSONAL = { "1g" },
 	REPAIRED_GUILD = { "1g" },
 	REPAIRED_MIXED = { "1g" },

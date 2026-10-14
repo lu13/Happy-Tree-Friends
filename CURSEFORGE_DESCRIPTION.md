@@ -1,6 +1,6 @@
 # Happy Tree Friends
 
-Happy Tree Friends is a lightweight quality-of-life toolkit for **World of Warcraft Retail 12.1**.
+Happy Tree Friends is a lightweight quality-of-life toolkit for **World of Warcraft Retail 12.1 / 12.1.5**.
 
 ## Features
 
